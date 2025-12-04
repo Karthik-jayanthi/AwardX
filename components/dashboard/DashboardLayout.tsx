@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, FileText, Gavel, 
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
-  ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2
+  ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
+  UserCog
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Program, Category, db } from '../../services/demoDb';
+import { Program, Category, db, PERMISSIONS, Contact } from '../../services/demoDb';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 
@@ -52,6 +54,7 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ id, label, icon: Icon, curren
   </div>
 );
 
+// ... (CategoryTreeItem remains unchanged) ...
 interface CategoryTreeItemProps {
   category: Category;
   allCategories: Category[];
@@ -61,7 +64,6 @@ interface CategoryTreeItemProps {
   onSelect: (id: string) => void;
 }
 
-// Recursive Tree Component
 const CategoryTreeItem: React.FC<CategoryTreeItemProps> = ({ 
   category, 
   allCategories, 
@@ -134,14 +136,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+  const [isTestMode, setIsTestMode] = useState(false);
   
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [parentForModal, setParentForModal] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
+  
+  // User & Permissions
+  const [currentUser, setCurrentUser] = useState<Contact>(db.getCurrentUser());
+  const [allUsers, setAllUsers] = useState<Contact[]>([]);
 
   useEffect(() => {
+    setCurrentUser(db.getCurrentUser());
+    setAllUsers(db.getContacts().filter(c => c.role !== 'Applicant')); // For quick switch
     if (activeEvent) {
       setCategories(db.getCategories(activeEvent.id));
     }
@@ -166,30 +175,44 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     setIsCategoryModalOpen(true);
   };
 
+  // Define Nav items with Permissions
   const leftNavItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'schedule', label: 'Schedule', icon: CalendarClock }, 
-    { id: 'submission-setup', label: 'Submission Process', icon: Settings2 }, 
-    { id: 'submissions', label: 'Submissions', icon: FileText },
-    { id: 'judging', label: 'Judging', icon: Gavel },
-    { id: 'awards', label: 'Awards', icon: Trophy },
-    { id: 'templates', label: 'Form Builder', icon: LayoutTemplate },
-    { id: 'messages', label: 'Messages', icon: MessageSquare },
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
+    { id: 'schedule', label: 'Schedule', icon: CalendarClock, permission: PERMISSIONS.MANAGE_PROGRAMS }, 
+    { id: 'submission-setup', label: 'Submission Process', icon: Settings2, permission: PERMISSIONS.MANAGE_PROGRAMS }, 
+    { id: 'submissions', label: 'Submissions', icon: FileText, permission: PERMISSIONS.VIEW_SUBMISSIONS },
+    { id: 'judging', label: 'Judging', icon: Gavel, permission: PERMISSIONS.VIEW_JUDGING },
+    { id: 'awards', label: 'Awards', icon: Trophy, permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'templates', label: 'Form Builder', icon: LayoutTemplate, permission: PERMISSIONS.MANAGE_FORMS },
+    { id: 'messages', label: 'Messages', icon: MessageSquare, permission: PERMISSIONS.VIEW_MESSAGES },
   ];
 
   const rightNavItems = [
-    { id: 'reach', label: 'Reach', icon: Share2 },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'users', label: 'CRM', icon: Users },
-    { id: 'teams', label: 'Teams & Roles', icon: Shield },
-    { id: 'logs', label: 'Audit Logs', icon: Activity },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'reach', label: 'Reach', icon: Share2, permission: PERMISSIONS.MANAGE_REACH },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3, permission: PERMISSIONS.VIEW_ANALYTICS },
+    { id: 'users', label: 'CRM', icon: Users, permission: PERMISSIONS.MANAGE_CRM },
+    { id: 'teams', label: 'Teams & Roles', icon: Shield, permission: PERMISSIONS.MANAGE_TEAMS },
+    { id: 'logs', label: 'Audit Logs', icon: Activity, permission: PERMISSIONS.VIEW_LOGS },
+    { id: 'settings', label: 'Settings', icon: Settings, permission: PERMISSIONS.MANAGE_SETTINGS },
   ];
 
+  const filterNav = (items: any[]) => items.filter(item => db.hasPermission(item.permission));
+
+  const visibleLeftNav = filterNav(leftNavItems);
+  const visibleRightNav = filterNav(rightNavItems);
   const rootCategories = categories.filter(c => c.parentId === null);
+
+  const handleUserSwitch = (userId: string) => {
+      db.setCurrentUser(userId);
+      window.location.reload(); // Simple reload to refresh all permissions
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-slate-900 overflow-hidden">
+      {/* Visual Indicator for Test Mode */}
+      {isTestMode && (
+        <div className="fixed top-0 left-0 w-full h-1 bg-amber-400 z-[60]" />
+      )}
       
       {/* LEFT SIDEBAR - Desktop */}
       <aside 
@@ -232,7 +255,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="flex-1 overflow-y-auto py-6 px-3 scrollbar-hide">
           {!isLeftCollapsed && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3 font-display">Event Operations</div>}
           
-          {leftNavItems.map((item) => (
+          {visibleLeftNav.map((item) => (
             <SidebarItem
               key={item.id}
               id={item.id}
@@ -268,19 +291,34 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
 
         {/* User Profile (Left Bottom) */}
-        <div className="p-3 border-t border-slate-100">
-           <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all ${isLeftCollapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
+        <div className="p-3 border-t border-slate-100 relative group">
+           <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${isLeftCollapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
               <img 
-                 src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80" 
+                 src={currentUser.avatar} 
                  alt="User" 
                  className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover shrink-0"
               />
               {!isLeftCollapsed && (
                 <div className="flex-1 min-w-0 overflow-hidden">
-                   <div className="text-sm font-bold text-slate-900 truncate font-display">Sarah Jenkins</div>
-                   <div className="text-xs text-slate-500 truncate">Admin Workspace</div>
+                   <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
+                   <div className="text-xs text-indigo-600 font-medium truncate">{currentUser.role}</div>
                 </div>
               )}
+           </div>
+           
+           {/* User Switcher Dropdown (For Demo Purposes) */}
+           <div className="absolute bottom-full left-0 w-64 bg-white rounded-xl shadow-2xl border border-slate-100 p-2 mb-2 hidden group-hover:block z-50">
+               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">Switch Persona (Demo)</div>
+               {allUsers.map(u => (
+                   <button 
+                    key={u.id}
+                    onClick={() => handleUserSwitch(u.id)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm ${currentUser.id === u.id ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-50'}`}
+                   >
+                       <img src={u.avatar} className="w-5 h-5 rounded-full" />
+                       <span className="truncate">{u.name} ({u.role})</span>
+                   </button>
+               ))}
            </div>
            
            <button 
@@ -328,6 +366,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-4 lg:gap-6">
+            {/* PRD 4.8 Test Mode Toggle */}
+            <div 
+              onClick={() => setIsTestMode(!isTestMode)}
+              className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-colors border ${isTestMode ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}
+            >
+               <div className={`w-8 h-4 rounded-full p-0.5 transition-colors relative ${isTestMode ? 'bg-amber-400' : 'bg-slate-300'}`}>
+                  <div className={`w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isTestMode ? 'translate-x-4' : 'translate-x-0'}`}></div>
+               </div>
+               <span className={`text-xs font-bold uppercase tracking-wide ${isTestMode ? 'text-amber-700' : 'text-slate-500'}`}>
+                  {isTestMode ? 'Sandbox' : 'Live'}
+               </span>
+            </div>
+
             <div className="hidden sm:flex relative group">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input 
@@ -346,6 +397,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Scrollable Content */}
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+          {isTestMode && (
+             <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                <Beaker className="w-5 h-5 text-amber-600 mt-0.5" />
+                <div>
+                   <h4 className="text-sm font-bold text-amber-800">You are in Sandbox Mode</h4>
+                   <p className="text-xs text-amber-700 mt-1">Actions performed here will not affect live data. Use this environment to test your program configuration.</p>
+                </div>
+             </div>
+          )}
           <div className="max-w-7xl mx-auto">
              {children}
           </div>
@@ -378,17 +438,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-6 px-3">
-          {rightNavItems.map((item) => (
-            <SidebarItem 
-              key={item.id} 
-              id={item.id} 
-              label={item.label} 
-              icon={item.icon} 
-              collapsed={isRightCollapsed} 
-              currentView={currentView}
-              onClick={() => onChangeView(item.id)}
-            />
-          ))}
+          {visibleRightNav.length > 0 ? (
+              visibleRightNav.map((item) => (
+                <SidebarItem 
+                  key={item.id} 
+                  id={item.id} 
+                  label={item.label} 
+                  icon={item.icon} 
+                  collapsed={isRightCollapsed} 
+                  currentView={currentView}
+                  onClick={() => onChangeView(item.id)}
+                />
+              ))
+          ) : (
+              !isRightCollapsed && <div className="text-xs text-slate-400 text-center px-4">No tools available for your role.</div>
+          )}
         </div>
 
         {/* Promo / Bottom Action */}
@@ -449,7 +513,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <div>
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Operations</div>
                   <div className="space-y-1">
-                    {leftNavItems.map((item) => (
+                    {visibleLeftNav.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => {
@@ -472,7 +536,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 <div>
                   <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Management</div>
                   <div className="space-y-1">
-                    {rightNavItems.map((item) => (
+                    {visibleRightNav.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => {

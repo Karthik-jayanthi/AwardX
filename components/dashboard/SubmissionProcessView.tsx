@@ -1,9 +1,10 @@
-
 import React, { useState } from 'react';
 import { Program } from '../../services/demoDb';
 import { 
   FileText, Settings, LayoutTemplate, CreditCard, 
-  CheckCircle2, Circle, ChevronRight, Plus, GripVertical, GripHorizontal
+  CheckCircle2, Circle, ChevronRight, Plus, GripVertical, GripHorizontal,
+  Type, Image as ImageIcon, Link2, List, Calendar, Mail, Phone, Move,
+  UploadCloud, ShieldCheck, UserCircle, Layers, AlertCircle, FileCheck
 } from 'lucide-react';
 import { Button } from '../Button';
 
@@ -13,13 +14,110 @@ interface SubmissionProcessViewProps {
 
 const steps = [
   { id: 'guidelines', label: 'Guidelines', icon: FileText, status: 'completed' },
-  { id: 'submission', label: 'Submission', icon: Settings, status: 'completed' },
-  { id: 'form', label: 'Form', icon: LayoutTemplate, status: 'completed' },
+  { id: 'submission', label: 'Submission Config', icon: Settings, status: 'active' },
+  { id: 'form', label: 'Form Builder', icon: LayoutTemplate, status: 'pending' },
   { id: 'fees', label: 'Fees', icon: CreditCard, status: 'pending' },
 ];
 
+const formFields = [
+  { type: 'text', label: 'Short Text', icon: Type },
+  { type: 'textarea', label: 'Long Text', icon: FileText },
+  { type: 'file', label: 'File Upload', icon: ImageIcon },
+  { type: 'link', label: 'URL / Link', icon: Link2 },
+  { type: 'select', label: 'Dropdown', icon: List },
+  { type: 'date', label: 'Date', icon: Calendar },
+  { type: 'email', label: 'Email', icon: Mail },
+];
+
 export const SubmissionProcessView: React.FC<SubmissionProcessViewProps> = ({ activeEvent }) => {
-  const [activeStep, setActiveStep] = useState('guidelines');
+  const [activeStep, setActiveStep] = useState('submission');
+  
+  // Configuration State
+  const [config, setConfig] = useState({
+    project: {
+        shortDesc: true,
+        category: true,
+        role: true,
+        longDesc: false,
+        keywords: true
+    },
+    uploads: {
+        images: true,
+        video: true,
+        pdf: true,
+        embeds: true,
+        min: 1,
+        max: 5
+    },
+    itemMetadata: {
+        title: true,
+        description: true,
+        year: true,
+        dimensions: false,
+        price: false,
+        medium: false
+    },
+    compliance: {
+        terms: true,
+        originality: true,
+        copyright: false
+    },
+    profile: {
+        social: true,
+        portfolio: true
+    },
+    advanced: {
+        cv: false,
+        budget: false,
+        references: false
+    }
+  });
+
+  const toggleConfig = (section: keyof typeof config, key: string) => {
+      setConfig(prev => ({
+          ...prev,
+          [section]: {
+              ...prev[section],
+              [key]: !((prev[section] as any)[key])
+          }
+      }));
+  };
+
+  const ConfigToggle = ({ 
+      label, 
+      description, 
+      checked, 
+      onChange 
+  }: { label: string, description?: string, checked: boolean, onChange: () => void }) => (
+    <div 
+        onClick={onChange}
+        className={`flex items-center justify-between p-4 border rounded-xl transition-all cursor-pointer ${
+            checked 
+            ? 'bg-indigo-50 border-indigo-200 shadow-sm' 
+            : 'bg-white border-slate-200 hover:border-indigo-100 hover:bg-slate-50'
+        }`}
+    >
+        <div className="pr-4">
+            <div className={`font-bold text-sm ${checked ? 'text-indigo-900' : 'text-slate-900'}`}>{label}</div>
+            {description && <div className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</div>}
+        </div>
+        <div className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${checked ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+            <span className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+        </div>
+    </div>
+  );
+
+  const SectionHeader = ({ icon: Icon, title, description }: any) => (
+      <div className="mb-4">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
+                  <Icon className="w-5 h-5" />
+              </div>
+              {title}
+          </h3>
+          {description && <p className="text-sm text-slate-500 ml-10">{description}</p>}
+      </div>
+  );
 
   const renderContent = () => {
     switch (activeStep) {
@@ -55,69 +153,207 @@ export const SubmissionProcessView: React.FC<SubmissionProcessViewProps> = ({ ac
         );
       case 'submission':
         return (
-          <div className="space-y-6">
-             <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-6">General Settings</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                   <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1">Start Date</label>
-                      <input type="datetime-local" className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" defaultValue="2024-09-01T09:00" />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-1">Deadline</label>
-                      <input type="datetime-local" className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" defaultValue="2024-12-31T23:59" />
-                   </div>
+          <div className="space-y-8 pb-20">
+             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">Submission Configuration</h2>
+                        <p className="text-slate-500 text-sm">Define the core metadata and assets required for each entry.</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm">Reset Defaults</Button>
+                        <Button size="sm">Save Config</Button>
+                    </div>
                 </div>
 
-                <div className="space-y-4">
-                   <div className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-indigo-200 transition-colors">
-                      <div>
-                         <div className="font-bold text-slate-900 text-sm">Allow Editing</div>
-                         <div className="text-xs text-slate-500">Applicants can edit submissions after submitting until deadline.</div>
-                      </div>
-                      <input type="checkbox" className="toggle accent-indigo-600" defaultChecked />
-                   </div>
-                   <div className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-indigo-200 transition-colors">
-                      <div>
-                         <div className="font-bold text-slate-900 text-sm">Multiple Entries</div>
-                         <div className="text-xs text-slate-500">Allow users to submit more than one entry.</div>
-                      </div>
-                      <input type="checkbox" className="toggle accent-indigo-600" defaultChecked />
-                   </div>
-                </div>
-                
-                <div className="mt-6 flex justify-end">
-                   <Button>Update Settings</Button>
+                <div className="space-y-10">
+                    {/* 1. Project-Level Information */}
+                    <section>
+                        <SectionHeader icon={Layers} title="Project Information" description="High-level metadata describing the project as a whole." />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-10">
+                            <ConfigToggle 
+                                label="Project Title" 
+                                description="Required for all submissions."
+                                checked={true} 
+                                onChange={() => {}} // Always required
+                            />
+                            <ConfigToggle 
+                                label="Short Description" 
+                                description="Brief overview (max 280 chars)."
+                                checked={config.project.shortDesc} 
+                                onChange={() => toggleConfig('project', 'shortDesc')}
+                            />
+                            <ConfigToggle 
+                                label="Category / Discipline" 
+                                description="Allow users to select a field."
+                                checked={config.project.category} 
+                                onChange={() => toggleConfig('project', 'category')}
+                            />
+                            <ConfigToggle 
+                                label="Role of Applicant" 
+                                description="e.g. Lead Designer, Director."
+                                checked={config.project.role} 
+                                onChange={() => toggleConfig('project', 'role')}
+                            />
+                            <ConfigToggle 
+                                label="Long Description" 
+                                description="Extended concept statement."
+                                checked={config.project.longDesc} 
+                                onChange={() => toggleConfig('project', 'longDesc')}
+                            />
+                            <ConfigToggle 
+                                label="Keywords / Tags" 
+                                description="Helps with jury discoverability."
+                                checked={config.project.keywords} 
+                                onChange={() => toggleConfig('project', 'keywords')}
+                            />
+                        </div>
+                    </section>
+
+                    {/* 2. Works / Uploads */}
+                    <section>
+                        <SectionHeader icon={UploadCloud} title="Works & Uploads" description="The core creative assets being submitted." />
+                        <div className="pl-10 space-y-4">
+                            <div className="flex gap-4 mb-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Min Items</label>
+                                    <input type="number" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={config.uploads.min} onChange={(e) => setConfig({...config, uploads: {...config.uploads, min: parseInt(e.target.value)}})} />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Max Items</label>
+                                    <input type="number" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" value={config.uploads.max} onChange={(e) => setConfig({...config, uploads: {...config.uploads, max: parseInt(e.target.value)}})} />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <ConfigToggle label="Allow Images" description="JPG, PNG, WEBP (Max 50MB)" checked={config.uploads.images} onChange={() => toggleConfig('uploads', 'images')} />
+                                <ConfigToggle label="Allow Video Files" description="MP4, MOV (Max 500MB)" checked={config.uploads.video} onChange={() => toggleConfig('uploads', 'video')} />
+                                <ConfigToggle label="Allow PDF Documents" description="For decks and reports." checked={config.uploads.pdf} onChange={() => toggleConfig('uploads', 'pdf')} />
+                                <ConfigToggle label="External Embeds" description="YouTube, Vimeo, SoundCloud links." checked={config.uploads.embeds} onChange={() => toggleConfig('uploads', 'embeds')} />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 3. Work-Level Metadata */}
+                    <section>
+                        <SectionHeader icon={List} title="Item Details" description="Metadata required for each individual uploaded item." />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-10">
+                            <ConfigToggle label="Item Title & Caption" checked={config.itemMetadata.title} onChange={() => toggleConfig('itemMetadata', 'title')} />
+                            <ConfigToggle label="Creation Year" checked={config.itemMetadata.year} onChange={() => toggleConfig('itemMetadata', 'year')} />
+                            <ConfigToggle label="Dimensions & Material" description="Relevant for physical art/products." checked={config.itemMetadata.dimensions} onChange={() => toggleConfig('itemMetadata', 'dimensions')} />
+                            <ConfigToggle label="Price / Value" description="For sales or insurance purposes." checked={config.itemMetadata.price} onChange={() => toggleConfig('itemMetadata', 'price')} />
+                        </div>
+                    </section>
+
+                    {/* 4. Compliance */}
+                    <section>
+                        <SectionHeader icon={ShieldCheck} title="Eligibility & Compliance" description="Mandatory confirmations for valid entry." />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-10">
+                            <ConfigToggle label="Originality Confirmation" description="I certify this is my own work." checked={config.compliance.originality} onChange={() => toggleConfig('compliance', 'originality')} />
+                            <ConfigToggle label="Terms & Conditions" description="Agree to event rules." checked={config.compliance.terms} onChange={() => toggleConfig('compliance', 'terms')} />
+                            <ConfigToggle label="Copyright Clearance" description="Permission for public display." checked={config.compliance.copyright} onChange={() => toggleConfig('compliance', 'copyright')} />
+                        </div>
+                    </section>
+
+                    {/* 5. Applicant Profile */}
+                    <section>
+                        <SectionHeader icon={UserCircle} title="Applicant Profile" description="Additional details beyond account registration." />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-10">
+                            <ConfigToggle label="Social Media Links" description="Instagram, LinkedIn, X." checked={config.profile.social} onChange={() => toggleConfig('profile', 'social')} />
+                            <ConfigToggle label="Website / Portfolio" description="Link to external portfolio." checked={config.profile.portfolio} onChange={() => toggleConfig('profile', 'portfolio')} />
+                        </div>
+                    </section>
+
+                    {/* 6. Advanced */}
+                    <section>
+                        <SectionHeader icon={FileCheck} title="Advanced Fields" description="Specific requirements for grants/residencies." />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-10">
+                            <ConfigToggle label="CV / Resume" description="PDF Upload." checked={config.advanced.cv} onChange={() => toggleConfig('advanced', 'cv')} />
+                            <ConfigToggle label="Budget Breakdown" description="Table for grant requests." checked={config.advanced.budget} onChange={() => toggleConfig('advanced', 'budget')} />
+                            <ConfigToggle label="References" description="Contact info for referees." checked={config.advanced.references} onChange={() => toggleConfig('advanced', 'references')} />
+                        </div>
+                    </section>
                 </div>
              </div>
           </div>
         );
       case 'form':
         return (
-           <div className="space-y-6">
-              <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                 <div>
-                    <h3 className="text-lg font-bold text-slate-900">Form Builder</h3>
-                    <p className="text-slate-500 text-sm">Drag and drop fields to customize your submission form.</p>
+           <div className="flex gap-6 h-full">
+              {/* Toolbox */}
+              <div className="w-64 flex-shrink-0 space-y-4">
+                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Input Fields</h4>
+                    <div className="space-y-2">
+                       {formFields.map((field) => (
+                          <div key={field.label} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50 hover:border-indigo-200 hover:bg-white hover:shadow-sm cursor-grab active:cursor-grabbing transition-all group">
+                             <field.icon className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                             <span className="text-sm font-medium text-slate-700">{field.label}</span>
+                             <Move className="w-3 h-3 ml-auto text-slate-300 opacity-0 group-hover:opacity-100" />
+                          </div>
+                       ))}
+                    </div>
                  </div>
-                 <Button size="sm" variant="outline"><Plus className="w-4 h-4 mr-2" /> Add Field</Button>
+                 <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                    <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2">Pro Feature</h4>
+                    <p className="text-xs text-indigo-600 mb-3">Enable <strong>Conditional Logic</strong> to show/hide fields based on answers.</p>
+                    <div className="h-2 w-full bg-indigo-200 rounded-full overflow-hidden">
+                       <div className="h-full w-2/3 bg-indigo-500"></div>
+                    </div>
+                 </div>
               </div>
 
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-3 min-h-[400px]">
-                 {['Project Title', 'Description', 'Category Selection', 'Main Image Upload', 'Video Link'].map((field, i) => (
-                    <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 cursor-move hover:border-indigo-300 hover:shadow-md transition-all group">
-                       <GripVertical className="w-5 h-5 text-slate-300 group-hover:text-indigo-400" />
-                       <div className="flex-1 font-medium text-slate-700">{field}</div>
-                       <div className="flex items-center gap-4">
-                          <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400 bg-slate-100 px-2 py-1 rounded">Required</div>
-                          <button className="text-slate-400 hover:text-indigo-600 text-sm font-medium">Edit</button>
+              {/* Canvas */}
+              <div className="flex-1 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 p-8 overflow-y-auto min-h-[600px] relative">
+                 <div className="absolute top-4 right-4 flex gap-2">
+                    <Button size="sm" variant="white">Preview</Button>
+                    <Button size="sm">Save Form</Button>
+                 </div>
+
+                 <div className="max-w-2xl mx-auto space-y-4">
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
+                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
+                          <GripVertical className="w-5 h-5" />
+                       </div>
+                       <label className="block text-sm font-bold text-slate-900 mb-1">Project Title <span className="text-red-500">*</span></label>
+                       <input disabled className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50" placeholder="Enter title" />
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
+                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
+                          <GripVertical className="w-5 h-5" />
+                       </div>
+                       <label className="block text-sm font-bold text-slate-900 mb-1">Category</label>
+                       <select disabled className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50">
+                          <option>Select a category...</option>
+                       </select>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
+                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
+                          <GripVertical className="w-5 h-5" />
+                       </div>
+                       <label className="block text-sm font-bold text-slate-900 mb-1">Project Description</label>
+                       <textarea disabled className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 h-24 resize-none" placeholder="Describe your entry..." />
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative group hover:border-indigo-300 transition-colors">
+                       <div className="absolute -left-8 top-1/2 -translate-y-1/2 cursor-grab text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100">
+                          <GripVertical className="w-5 h-5" />
+                       </div>
+                       <div className="flex justify-between items-center mb-2">
+                          <label className="block text-sm font-bold text-slate-900">Project Files</label>
+                          <span className="text-xs text-slate-400">Max 50MB</span>
+                       </div>
+                       <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 flex flex-col items-center justify-center bg-slate-50">
+                          <ImageIcon className="w-8 h-8 text-slate-300 mb-2" />
+                          <span className="text-sm text-slate-500">Drag files here</span>
                        </div>
                     </div>
-                 ))}
-                 <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 flex flex-col items-center justify-center text-slate-400 hover:bg-white hover:border-indigo-300 cursor-pointer transition-all hover:text-indigo-500">
-                    <Plus className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-sm font-medium">Drag fields here or click to add</span>
+                    
+                    {/* Drop Zone */}
+                    <div className="h-24 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl flex items-center justify-center text-indigo-400 text-sm font-medium">
+                       Drop new field here
+                    </div>
                  </div>
               </div>
            </div>
@@ -142,11 +378,11 @@ export const SubmissionProcessView: React.FC<SubmissionProcessViewProps> = ({ ac
 
   return (
     <div className="flex flex-col lg:flex-row gap-8 h-[calc(100vh-140px)]">
-      {/* Dark Sidebar Navigation */}
-      <div className="w-full lg:w-72 bg-[#1e293b] rounded-2xl shadow-xl overflow-hidden flex flex-col text-slate-300">
-         <div className="p-6 border-b border-slate-700/50">
-            <h2 className="font-bold text-white text-lg">Submission Process</h2>
-            <p className="text-xs text-slate-400 mt-1">Configure the intake flow.</p>
+      {/* Light Sidebar Navigation */}
+      <div className="w-full lg:w-72 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col shrink-0">
+         <div className="p-6 border-b border-slate-100">
+            <h2 className="font-bold text-slate-900 text-lg">Submission Process</h2>
+            <p className="text-xs text-slate-500 mt-1">Configure the intake flow.</p>
          </div>
          <div className="flex-1 p-3 space-y-1 overflow-y-auto">
             {steps.map((step) => (
@@ -155,20 +391,20 @@ export const SubmissionProcessView: React.FC<SubmissionProcessViewProps> = ({ ac
                   onClick={() => setActiveStep(step.id)}
                   className={`w-full flex items-center justify-between p-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                      activeStep === step.id 
-                     ? 'bg-slate-800 text-white shadow-lg border border-slate-700' 
-                     : 'hover:bg-slate-800/50 hover:text-white'
+                     ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' 
+                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                >
                   <div className="flex items-center gap-3">
-                     <GripHorizontal className="w-4 h-4 text-slate-600" />
+                     <step.icon className={`w-4 h-4 ${activeStep === step.id ? 'text-indigo-600' : 'text-slate-400'}`} />
                      <div className="flex items-center gap-3">
                         {step.label}
                      </div>
                   </div>
-                  {step.status === 'completed' ? (
-                     <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                  {step.status === 'completed' && activeStep !== step.id ? (
+                     <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
                   ) : (
-                     <div className="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
+                     <div className="w-2.5 h-2.5 rounded-full bg-slate-200"></div>
                   )}
                </button>
             ))}
@@ -176,7 +412,7 @@ export const SubmissionProcessView: React.FC<SubmissionProcessViewProps> = ({ ac
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto pr-2">
+      <div className="flex-1 overflow-y-auto pr-2 pb-20 scrollbar-hide">
          {renderContent()}
       </div>
     </div>

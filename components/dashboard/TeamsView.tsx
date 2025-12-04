@@ -1,28 +1,132 @@
 
 import React, { useState, useEffect } from 'react';
-import { db, Contact, Role } from '../../services/demoDb';
-import { Plus, UserPlus, Shield, MoreVertical, Search, Filter, Trash2 } from 'lucide-react';
+import { db, Contact, Role, PERMISSIONS } from '../../services/demoDb';
+import { Plus, UserPlus, Shield, MoreVertical, Search, Filter, Trash2, Edit2, CheckCircle2, UserCog } from 'lucide-react';
 import { Button } from '../Button';
 import { UserHoverCard } from '../UserHoverCard';
 import { Modal } from '../Modal';
+
+const PERMISSION_GROUPS = [
+    {
+        label: "Submissions & Entries",
+        items: [
+            { key: PERMISSIONS.VIEW_SUBMISSIONS, label: "View Submissions" },
+            { key: PERMISSIONS.MANAGE_SUBMISSIONS, label: "Manage Status (Accept/Reject)" },
+            { key: PERMISSIONS.MANAGE_FORMS, label: "Edit Submission Forms" },
+        ]
+    },
+    {
+        label: "Judging",
+        items: [
+            { key: PERMISSIONS.VIEW_JUDGING, label: "View Judging Panels" },
+            { key: PERMISSIONS.MANAGE_JUDGING, label: "Assign Judges & Configure Criteria" },
+        ]
+    },
+    {
+        label: "Program Management",
+        items: [
+            { key: PERMISSIONS.VIEW_OVERVIEW, label: "View Dashboard Stats" },
+            { key: PERMISSIONS.MANAGE_PROGRAMS, label: "Edit Program Schedule & Awards" },
+            { key: PERMISSIONS.VIEW_ANALYTICS, label: "View Analytics" },
+        ]
+    },
+    {
+        label: "Administration",
+        items: [
+            { key: PERMISSIONS.MANAGE_TEAMS, label: "Manage Teams & Roles" },
+            { key: PERMISSIONS.MANAGE_SETTINGS, label: "Access Global Settings" },
+            { key: PERMISSIONS.MANAGE_REACH, label: "Social Media Automation" },
+            { key: PERMISSIONS.VIEW_LOGS, label: "View Audit Logs" },
+        ]
+    }
+];
 
 export const TeamsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'members' | 'roles'>('members');
   const [members, setMembers] = useState<Contact[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [currentUser, setCurrentUser] = useState<Contact>(db.getCurrentUser());
+  
+  // Modals
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  
+  // Role Editing State
+  const [editingRole, setEditingRole] = useState<Partial<Role>>({ 
+      name: '', 
+      permissions: [], 
+      color: 'bg-slate-100 text-slate-700' 
+  });
 
   useEffect(() => {
-    setMembers(db.getContacts().filter(c => c.role !== 'Applicant')); // Filter out applicants for team view
-    setRoles(db.getRoles());
+    refreshData();
   }, []);
+
+  const refreshData = () => {
+      setMembers(db.getContacts().filter(c => c.role !== 'Applicant'));
+      setRoles(db.getRoles());
+      setCurrentUser(db.getCurrentUser());
+  };
+
+  const handleCreateRole = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!editingRole.name) return;
+
+      if (editingRole.id) {
+          // Update
+          db.updateRole(editingRole as Role);
+      } else {
+          // Create
+          db.addRole({
+              name: editingRole.name,
+              permissions: editingRole.permissions || [],
+              color: editingRole.color || 'bg-slate-100 text-slate-700'
+          });
+      }
+      
+      refreshData();
+      setIsRoleModalOpen(false);
+      setEditingRole({ name: '', permissions: [], color: 'bg-slate-100 text-slate-700' });
+  };
+
+  const openRoleModal = (role?: Role) => {
+      if (role) {
+          setEditingRole({ ...role });
+      } else {
+          setEditingRole({ name: '', permissions: [], color: 'bg-slate-100 text-slate-700' });
+      }
+      setIsRoleModalOpen(true);
+  };
+
+  const togglePermission = (key: string) => {
+      const current = editingRole.permissions || [];
+      if (current.includes('all')) {
+          // If 'all' was selected, clear it and select just this one (switching to granular mode)
+          setEditingRole({ ...editingRole, permissions: [key] });
+          return;
+      }
+
+      if (current.includes(key)) {
+          setEditingRole({ ...editingRole, permissions: current.filter(p => p !== key) });
+      } else {
+          setEditingRole({ ...editingRole, permissions: [...current, key] });
+      }
+  };
+
+  const handleImpersonate = (userId: string) => {
+      db.setCurrentUser(userId);
+      refreshData();
+      window.location.reload(); // Force reload to re-render layout with new permissions
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">Team Management</h1>
-           <p className="text-slate-500">Manage your team members, judges, and permissions.</p>
+           <p className="text-slate-500">
+               Manage your team members, roles, and granular permissions.
+           </p>
         </div>
         <div className="flex gap-2">
            <div className="bg-slate-100 p-1 rounded-lg flex gap-1">
@@ -69,13 +173,16 @@ export const TeamsView: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                  {members.map((member) => (
-                    <tr key={member.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={member.id} className={`hover:bg-slate-50 transition-colors ${currentUser.id === member.id ? 'bg-indigo-50/30' : ''}`}>
                        <td className="p-4 pl-6">
                           <UserHoverCard user={member}>
                              <div className="flex items-center gap-3 cursor-pointer group">
                                 <img src={member.avatar} alt="" className="w-10 h-10 rounded-full border-2 border-slate-100 object-cover group-hover:border-indigo-200 transition-colors" />
                                 <div>
-                                   <div className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">{member.name}</div>
+                                   <div className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
+                                       {member.name}
+                                       {currentUser.id === member.id && <span className="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">You</span>}
+                                   </div>
                                    <div className="text-slate-500 text-xs">{member.email}</div>
                                 </div>
                              </div>
@@ -100,9 +207,20 @@ export const TeamsView: React.FC = () => {
                           {member.lastActive}
                        </td>
                        <td className="p-4 text-right">
-                           <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                              <MoreVertical className="w-4 h-4" />
-                           </button>
+                           <div className="flex justify-end gap-2">
+                               {currentUser.id !== member.id && (
+                                   <button 
+                                     onClick={() => handleImpersonate(member.id)}
+                                     className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
+                                     title="Impersonate User (Demo Only)"
+                                   >
+                                      <UserCog className="w-4 h-4" />
+                                   </button>
+                               )}
+                               <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                                  <MoreVertical className="w-4 h-4" />
+                               </button>
+                           </div>
                        </td>
                     </tr>
                  ))}
@@ -114,41 +232,53 @@ export const TeamsView: React.FC = () => {
       {activeTab === 'roles' && (
          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {roles.map((role) => (
-               <div key={role.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group">
+               <div key={role.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group flex flex-col h-full">
                   <div className="flex justify-between items-start mb-6">
                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${role.color.split(' ')[0]}`}>
                         <Shield className={`w-6 h-6 ${role.color.split(' ')[1]}`} />
                      </div>
-                     <button className="text-slate-400 hover:text-slate-600"><MoreVertical className="w-5 h-5" /></button>
+                     <button onClick={() => openRoleModal(role)} className="text-slate-400 hover:text-indigo-600 p-2 hover:bg-slate-100 rounded-lg">
+                        <Edit2 className="w-4 h-4" />
+                     </button>
                   </div>
                   
                   <h3 className="text-lg font-bold text-slate-900 mb-2">{role.name}</h3>
                   <div className="flex items-center gap-4 text-sm text-slate-500 mb-6">
                      <span>{role.usersCount} users</span>
                      <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                     <span>{role.permissions.length} permissions</span>
+                     <span>
+                         {role.permissions.includes('all') ? 'Full Access' : `${role.permissions.length} permissions`}
+                     </span>
                   </div>
 
-                  <div className="flex -space-x-2 mb-6">
-                     {[...Array(Math.min(4, role.usersCount))].map((_, i) => (
-                        <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">
-                           {String.fromCharCode(65+i)}
-                        </div>
-                     ))}
-                     {role.usersCount > 4 && (
-                        <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
-                           +{role.usersCount - 4}
-                        </div>
-                     )}
+                  <div className="flex-1">
+                      <div className="flex -space-x-2 mb-6">
+                         {[...Array(Math.min(4, role.usersCount))].map((_, i) => (
+                            <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-500">
+                               {String.fromCharCode(65+i)}
+                            </div>
+                         ))}
+                         {role.usersCount > 4 && (
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+                               +{role.usersCount - 4}
+                            </div>
+                         )}
+                      </div>
                   </div>
 
-                  <button className="w-full py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
-                     Edit Role
+                  <button 
+                    onClick={() => openRoleModal(role)}
+                    className="w-full py-2 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors mt-auto"
+                  >
+                     Edit Permissions
                   </button>
                </div>
             ))}
             
-            <button className="border-2 border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all min-h-[250px]">
+            <button 
+                onClick={() => openRoleModal()}
+                className="border-2 border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all min-h-[250px]"
+            >
                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-4 group-hover:bg-indigo-100">
                   <Plus className="w-6 h-6" />
                </div>
@@ -157,6 +287,7 @@ export const TeamsView: React.FC = () => {
          </div>
       )}
 
+      {/* Invite Modal */}
       <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Invite Team Member">
          <div className="space-y-4">
             <div>
@@ -177,6 +308,79 @@ export const TeamsView: React.FC = () => {
                <Button>Send Invitations</Button>
             </div>
          </div>
+      </Modal>
+
+      {/* Role Editor Modal */}
+      <Modal isOpen={isRoleModalOpen} onClose={() => setIsRoleModalOpen(false)} title={editingRole.id ? "Edit Role" : "Create New Role"}>
+          <form onSubmit={handleCreateRole} className="space-y-6">
+              <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Role Name</label>
+                  <input 
+                    type="text" 
+                    required
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="e.g. Marketing Manager"
+                    value={editingRole.name}
+                    onChange={(e) => setEditingRole({...editingRole, name: e.target.value})}
+                  />
+              </div>
+
+              <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-3">Permissions</label>
+                  
+                  {editingRole.permissions?.includes('all') ? (
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-center">
+                          <Shield className="w-8 h-8 text-indigo-600 mx-auto mb-2" />
+                          <h4 className="font-bold text-indigo-900">Administrator Access</h4>
+                          <p className="text-xs text-indigo-700 mb-3">This role has full access to all features.</p>
+                          <button 
+                            type="button"
+                            onClick={() => setEditingRole({...editingRole, permissions: []})}
+                            className="text-xs font-bold underline text-indigo-600 hover:text-indigo-800"
+                          >
+                              Switch to granular permissions
+                          </button>
+                      </div>
+                  ) : (
+                      <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2">
+                          {PERMISSION_GROUPS.map((group) => (
+                              <div key={group.label}>
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1">{group.label}</h4>
+                                  <div className="space-y-2">
+                                      {group.items.map((perm) => (
+                                          <label key={perm.key} className="flex items-center cursor-pointer p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                              <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 mr-3"
+                                                checked={editingRole.permissions?.includes(perm.key)}
+                                                onChange={() => togglePermission(perm.key)}
+                                              />
+                                              <span className="text-sm text-slate-700">{perm.label}</span>
+                                          </label>
+                                      ))}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+
+              <div className="pt-4 flex justify-between items-center border-t border-slate-100">
+                  {!editingRole.permissions?.includes('all') && (
+                      <button 
+                        type="button" 
+                        onClick={() => setEditingRole({...editingRole, permissions: ['all']})}
+                        className="text-xs text-slate-400 hover:text-indigo-600 font-medium"
+                      >
+                          Grant Full Admin Access
+                      </button>
+                  )}
+                  <div className="flex gap-3">
+                      <Button type="button" variant="ghost" onClick={() => setIsRoleModalOpen(false)}>Cancel</Button>
+                      <Button type="submit">Save Role</Button>
+                  </div>
+              </div>
+          </form>
       </Modal>
     </div>
   );
