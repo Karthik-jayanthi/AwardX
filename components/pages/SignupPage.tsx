@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Check, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { auth } from '../../services/supabase';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -29,10 +30,46 @@ interface SignupPageProps {
 
 export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [fullName, setFullName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleGoogleSignup = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const { error: authError } = await auth.signInWithProvider('google');
+      if (authError) {
+        setError(authError.message);
+        setIsLoading(false);
+      }
+      // If successful, redirect will happen via OAuth callback
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign up with Google');
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    onNavigate('demo');
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { error: authError } = await auth.signUp(email, password, { full_name: fullName });
+      if (authError) {
+        setError(authError.message);
+        setIsLoading(false);
+      } else {
+        // Successfully signed up, navigate to dashboard
+        onNavigate('dashboard');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign up');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -75,15 +112,35 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
             <p className="text-slate-500 text-lg">Join 2,000+ organizations running world-class awards.</p>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Social Auth */}
           <div className="grid grid-cols-3 gap-4 mb-8">
-            <button className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none">
+            <button 
+              onClick={handleGoogleSignup}
+              disabled={isLoading}
+              className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Sign up with Google"
+            >
                <GoogleIcon />
             </button>
-            <button className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none">
+            <button 
+              disabled
+              className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none opacity-50 cursor-not-allowed"
+              title="Coming soon"
+            >
                <AppleIcon />
             </button>
-             <button className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none">
+             <button 
+              disabled
+              className="flex items-center justify-center py-3.5 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all focus:ring-2 focus:ring-slate-200 outline-none opacity-50 cursor-not-allowed"
+              title="Coming soon"
+            >
                <LinkedInIcon />
             </button>
           </div>
@@ -107,7 +164,10 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
                  </div>
                  <input 
                   type="text" 
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400" 
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  disabled={isLoading}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed" 
                   placeholder="Sarah Jenkins" 
                  />
                </div>
@@ -121,7 +181,11 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
                  </div>
                  <input 
                   type="email" 
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  required
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed" 
                   placeholder="sarah@company.com" 
                  />
                </div>
@@ -135,7 +199,11 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
                  </div>
                  <input 
                   type={showPassword ? "text" : "password"}
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  required
+                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed" 
                   placeholder="Create a strong password" 
                  />
                  <button 
@@ -161,8 +229,12 @@ export const SignupPage: React.FC<SignupPageProps> = ({ onNavigate }) => {
                 </label>
              </div>
 
-             <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg shadow-lg shadow-slate-900/20 hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-0.5 transition-all duration-300 active:scale-[0.98]">
-                Create Account
+             <button 
+               type="submit" 
+               disabled={isLoading}
+               className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-lg shadow-lg shadow-slate-900/20 hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-0.5 transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+             >
+                {isLoading ? 'Creating account...' : 'Create Account'}
              </button>
           </form>
 

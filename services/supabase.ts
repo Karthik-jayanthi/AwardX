@@ -9,7 +9,7 @@ const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
 
 // Create Supabase client (untyped for flexibility until database is set up)
 // After running the SQL schema, regenerate types with: npx supabase gen types typescript --project-id YOUR_PROJECT_ID > services/database.types.ts
-export const supabase: SupabaseClient = isSupabaseConfigured 
+export const supabase: SupabaseClient | null = isSupabaseConfigured 
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
@@ -17,7 +17,10 @@ export const supabase: SupabaseClient = isSupabaseConfigured
         detectSessionInUrl: true,
       },
     })
-  : null as any; // Will be null if not configured - app should handle this gracefully
+  : null; // Will be null if not configured - app should handle this gracefully
+
+// Helper to check if Supabase is configured
+export const isSupabaseReady = () => supabase !== null;
 
 // ============================================================================
 // AUTH HELPERS
@@ -26,6 +29,9 @@ export const supabase: SupabaseClient = isSupabaseConfigured
 export const auth = {
   // Sign up with email/password
   signUp: async (email: string, password: string, metadata?: { full_name?: string }) => {
+    if (!supabase) {
+      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -38,6 +44,9 @@ export const auth = {
 
   // Sign in with email/password
   signIn: async (email: string, password: string) => {
+    if (!supabase) {
+      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -47,6 +56,9 @@ export const auth = {
 
   // Sign in with magic link
   signInWithMagicLink: async (email: string) => {
+    if (!supabase) {
+      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -58,10 +70,14 @@ export const auth = {
 
   // Sign in with OAuth provider
   signInWithProvider: async (provider: 'google' | 'github' | 'linkedin') => {
+    if (!supabase) {
+      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
+    const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin;
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${import.meta.env.VITE_SITE_URL}/auth/callback`,
+        redirectTo: `${siteUrl}`,
       },
     });
     return { data, error };
@@ -69,24 +85,36 @@ export const auth = {
 
   // Sign out
   signOut: async () => {
+    if (!supabase) {
+      return { error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { error } = await supabase.auth.signOut();
     return { error };
   },
 
   // Get current user
   getUser: async () => {
+    if (!supabase) {
+      return { user: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data: { user }, error } = await supabase.auth.getUser();
     return { user, error };
   },
 
   // Get current session
   getSession: async () => {
+    if (!supabase) {
+      return { session: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data: { session }, error } = await supabase.auth.getSession();
     return { session, error };
   },
 
   // Reset password
   resetPassword: async (email: string) => {
+    if (!supabase) {
+      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${import.meta.env.VITE_SITE_URL}/auth/reset-password`,
     });
@@ -95,6 +123,9 @@ export const auth = {
 
   // Update password
   updatePassword: async (newPassword: string) => {
+    if (!supabase) {
+      return { data: null, error: { message: 'Supabase is not configured. Please check your environment variables.' } };
+    }
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
     });
@@ -103,6 +134,9 @@ export const auth = {
 
   // Listen to auth state changes
   onAuthStateChange: (callback: (event: string, session: any) => void) => {
+    if (!supabase) {
+      return { data: { subscription: { unsubscribe: () => {} } } };
+    }
     return supabase.auth.onAuthStateChange(callback);
   },
 };
@@ -123,23 +157,40 @@ export const organizations = {
   },
 
   getCurrent: async (): Promise<{ data: { id: string } | null; error: any }> => {
-    const user = (await auth.getUser()).user;
-    if (!user) return { data: null, error: 'Not authenticated' };
+    if (!supabase) return { data: null, error: 'Supabase not configured' };
     
-    const { data, error } = await supabase
+    const { user, error: userError } = await auth.getUser();
+    if (userError || !user) return { data: null, error: userError || 'Not authenticated' };
+    
+    // First get the profile to get organization_id
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('organization_id, organizations(*)')
+      .select('organization_id')
       .eq('id', user.id)
       .single();
     
-    if (error || !data) return { data: null, error };
+    if (profileError) {
+      // Profile might not exist yet - that's okay, user just signed up
+      return { data: null, error: null };
+    }
     
-    // Handle the organizations data which could be an object or array
-    const org = Array.isArray(data.organizations) 
-      ? data.organizations[0] 
-      : data.organizations;
+    // If no organization_id, return null (user not assigned to org yet)
+    if (!profile || !profile.organization_id) {
+      return { data: null, error: null };
+    }
     
-    return { data: org as { id: string } | null, error: null };
+    // Then get the organization
+    const { data: org, error: orgError } = await supabase
+      .from('organizations')
+      .select('id, name, slug, logo_url, website, industry, plan')
+      .eq('id', profile.organization_id)
+      .single();
+    
+    if (orgError || !org) {
+      return { data: null, error: orgError || 'Organization not found' };
+    }
+    
+    return { data: org as { id: string }, error: null };
   },
 
   create: async (name: string, slug: string) => {

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
 import { DashboardOverview } from './DashboardOverview';
@@ -18,6 +18,7 @@ import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/demoDb';
+import { db as databaseService } from '../../services/database';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -26,6 +27,20 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [activeEvent, setActiveEvent] = useState<Program | null>(null);
   const [currentView, setCurrentView] = useState('overview');
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        await databaseService.initialize();
+      } catch (error) {
+        console.error('Failed to initialize database:', error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    initialize();
+  }, []);
 
   const renderView = () => {
     switch (currentView) {
@@ -61,6 +76,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <DashboardOverview activeEvent={activeEvent} />;
     }
   };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!activeEvent) {
     return (

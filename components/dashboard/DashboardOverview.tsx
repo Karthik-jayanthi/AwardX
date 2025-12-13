@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { db, Program } from '../../services/demoDb';
+import { Program } from '../../services/demoDb';
+import { db as databaseService } from '../../services/database';
 
 const submissionData = [
   { name: 'Mon', entries: 12 },
@@ -55,14 +56,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
   });
 
   useEffect(() => {
-    // Poll for updates in this demo environment
-    const updateStats = () => {
-       // If activeEvent is present, stats could be scoped. 
-       // For this demo, `db.getStats(id)` will just return mock data usually.
-       setStats(db.getStats(activeEvent?.id));
+    const updateStats = async () => {
+      try {
+        const statsData = await databaseService.getStats(activeEvent?.id);
+        setStats(statsData);
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
     };
     updateStats();
-    const interval = setInterval(updateStats, 2000);
+    const interval = setInterval(updateStats, 5000); // Update every 5 seconds
     return () => clearInterval(interval);
   }, [activeEvent]);
 

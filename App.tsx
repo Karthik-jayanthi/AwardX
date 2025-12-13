@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
@@ -21,6 +21,8 @@ import { SignupPage } from './components/pages/SignupPage';
 import { LoginPage } from './components/pages/LoginPage';
 import { ProductShowcase } from './components/ProductShowcase';
 import { Dashboard } from './components/dashboard/Dashboard';
+import { AuthCallback } from './components/AuthCallback';
+import { auth } from './services/supabase';
 
 const CTASection = () => (
   <section className="py-32 relative overflow-hidden bg-white">
@@ -59,6 +61,60 @@ const CTASection = () => (
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('home');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check auth state on mount and listen for changes
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { session, error } = await auth.getSession();
+        if (error) {
+          console.error('Error checking auth:', error);
+          setIsCheckingAuth(false);
+          return;
+        }
+        if (session) {
+          // User is authenticated, redirect to dashboard if on home/login/signup
+          if (['home', 'login', 'signup'].includes(currentPage)) {
+            setCurrentPage('dashboard');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking auth:', error);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const authStateChangeResult = auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setCurrentPage('dashboard');
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentPage('home');
+      }
+    });
+
+    // Only unsubscribe if we have a valid subscription
+    const subscription = authStateChangeResult?.data?.subscription;
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
+  }, []);
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const isCallback = window.location.hash.includes('access_token') || 
+                       window.location.hash.includes('error');
+    
+    if (isCallback && currentPage === 'home') {
+      setCurrentPage('auth-callback');
+    }
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -92,6 +148,73 @@ const App: React.FC = () => {
     }
   };
 
+  // Show loading state while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if Supabase is configured - show error if not
+  const checkSupabaseConfig = () => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    return !!(url && key);
+  };
+
+  if (!checkSupabaseConfig() && currentPage !== 'home') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="max-w-md mx-4 bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="text-red-600 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Configuration Required</h2>
+          <p className="text-slate-600 mb-4">
+            Supabase environment variables are not configured. Please create a <code className="bg-slate-100 px-2 py-1 rounded">.env</code> file with:
+          </p>
+          <div className="bg-slate-100 rounded-lg p-4 text-left text-sm font-mono mb-4">
+            <div>VITE_SUPABASE_URL=...</div>
+            <div>VITE_SUPABASE_ANON_KEY=...</div>
+            <div>VITE_SITE_URL=...</div>
+          </div>
+          <button
+            onClick={() => setCurrentPage('home')}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Go to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle OAuth callback
+  if (currentPage === 'auth-callback') {
+    return (
+      <AuthCallback
+        onSuccess={() => {
+          setCurrentPage('dashboard');
+          // Clear hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+        }}
+        onError={(error) => {
+          console.error('Auth error:', error);
+          setCurrentPage('login');
+          // Clear hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+        }}
+      />
+    );
+  }
+
   if (currentPage === 'signup') {
     return <SignupPage onNavigate={setCurrentPage} />;
   }
@@ -102,7 +225,14 @@ const App: React.FC = () => {
   
   // Render Demo/Dashboard without Header/Footer wrapping
   if (currentPage === 'demo' || currentPage === 'dashboard') {
-     return <Dashboard onLogout={() => setCurrentPage('home')} />;
+    return (
+      <Dashboard 
+        onLogout={async () => {
+          await auth.signOut();
+          setCurrentPage('home');
+        }} 
+      />
+    );
   }
 
   return (
