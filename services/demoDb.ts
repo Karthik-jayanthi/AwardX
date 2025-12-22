@@ -363,7 +363,7 @@ class DemoDatabase {
 
   deleteCategory(categoryId: string): void {
     const all = JSON.parse(localStorage.getItem(this.CATEGORIES_KEY) || '[]') as Category[];
-    
+
     // Recursive function to get all children IDs
     const getAllChildrenIds = (parentId: string): string[] => {
       const children = all.filter(c => c.parentId === parentId);
@@ -372,14 +372,14 @@ class DemoDatabase {
       const grandChildrenIds = childIds.flatMap(id => getAllChildrenIds(id));
       return [...childIds, ...grandChildrenIds];
     };
-    
+
     // Get all children IDs
     const childrenIds = getAllChildrenIds(categoryId);
-    
+
     // Delete the category and all its children
     const idsToDelete = [categoryId, ...childrenIds];
     const remaining = all.filter(c => !idsToDelete.includes(c.id));
-    
+
     localStorage.setItem(this.CATEGORIES_KEY, JSON.stringify(remaining));
   }
 
@@ -402,13 +402,24 @@ class DemoDatabase {
     return all.filter((f: any) => f.formId === formId).sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
-  saveForm(form: { id?: string; programId: string; name: string; description?: string; formType?: string; isActive?: boolean }): any {
+  saveForm(form: {
+    id?: string;
+    programId: string;
+    name: string;
+    description?: string;
+    formType?: string;
+    isActive?: boolean;
+    pages?: any[];
+    theme?: any;
+  }): any {
     const all = JSON.parse(localStorage.getItem(this.FORMS_KEY) || '[]');
     const formData = {
       ...form,
       id: form.id || `FORM-${Date.now()}`,
       formType: form.formType || 'submission',
       isActive: form.isActive !== undefined ? form.isActive : true,
+      pages: form.pages || [], // Default to empty array if not provided
+      theme: form.theme || undefined, // Store theme
       createdAt: form.id ? all.find((f: any) => f.id === form.id)?.createdAt || new Date().toISOString() : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -416,7 +427,8 @@ class DemoDatabase {
     if (form.id) {
       const index = all.findIndex((f: any) => f.id === form.id);
       if (index !== -1) {
-        all[index] = formData;
+        // Merge existing data with new updates to avoid losing fields if not passed (though fields are separate)
+        all[index] = { ...all[index], ...formData };
       } else {
         all.push(formData);
       }
@@ -432,7 +444,7 @@ class DemoDatabase {
     const all = JSON.parse(localStorage.getItem(this.FORM_FIELDS_KEY) || '[]');
     // Remove existing fields for this form
     const filtered = all.filter((f: any) => f.formId !== formId);
-    
+
     // Add new fields
     fields.forEach((field, index) => {
       filtered.push({
@@ -445,6 +457,7 @@ class DemoDatabase {
         isRequired: field.required || false,
         validationRules: field.validation || {},
         options: field.options || [],
+        pageId: field.pageId || 'page-1', // Persist pageId
         conditionalLogic: null,
         sortOrder: index,
         createdAt: new Date().toISOString(),

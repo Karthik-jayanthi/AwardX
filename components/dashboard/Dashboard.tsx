@@ -17,6 +17,7 @@ import { CategoriesView } from './CategoriesView';
 import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
 import { ProgramDetailsView } from './ProgramDetailsView';
+import { ScheduleRoundsView } from './scheduleRounds/ScheduleRoundsView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/demoDb';
 import { db as databaseService } from '../../services/database';
@@ -49,6 +50,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <DashboardOverview activeEvent={activeEvent} />;
       case 'schedule':
         return <ScheduleView activeEvent={activeEvent} />;
+      case 'schedule-rounds':
+        return <ScheduleRoundsView activeEvent={activeEvent} />;
       case 'submission-setup':
         return <SubmissionProcessView activeEvent={activeEvent} />;
       case 'awards':
@@ -99,9 +102,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        <EventSelectionView 
-          onSelectEvent={setActiveEvent} 
-          onLogout={onLogout} 
+        <EventSelectionView
+          onSelectEvent={setActiveEvent}
+          onLogout={onLogout}
         />
       </motion.div>
     );
@@ -114,12 +117,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       onChangeView={setCurrentView}
       onLogout={onLogout}
       onSwitchEvent={() => setActiveEvent(null)}
+      noPadding={currentView === 'awards' || currentView === 'templates' || currentView === 'submission-setup' || currentView === 'schedule-rounds'}
     >
       <motion.div
         key={currentView}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
+        className="h-full"
       >
         {renderView()}
       </motion.div>

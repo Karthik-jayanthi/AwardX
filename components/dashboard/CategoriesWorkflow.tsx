@@ -191,23 +191,23 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
             // Prevent body scroll when in fullscreen
             const originalOverflow = document.body.style.overflow;
             document.body.style.overflow = 'hidden';
-            
+
             // Center the view on the nodes when entering fullscreen
             if (nodes.length > 0) {
                 const minX = Math.min(...nodes.map(n => n.x));
                 const maxX = Math.max(...nodes.map(n => n.x));
                 const minY = Math.min(...nodes.map(n => n.y));
                 const maxY = Math.max(...nodes.map(n => n.y));
-                
+
                 const centerX = (minX + maxX) / 2;
                 const centerY = (minY + maxY) / 2;
-                
+
                 // Use a small timeout to ensure container dimensions are available
                 setTimeout(() => {
                     if (containerRef.current && isFullscreen) {
                         const containerWidth = containerRef.current.clientWidth || window.innerWidth;
                         const containerHeight = containerRef.current.clientHeight || window.innerHeight;
-                        
+
                         setOffset({
                             x: containerWidth / 2 - centerX * scale,
                             y: containerHeight / 2 - centerY * scale
@@ -215,7 +215,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                     }
                 }, 100);
             }
-            
+
             return () => {
                 document.body.style.overflow = originalOverflow;
             };
@@ -224,7 +224,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
             document.body.style.overflow = '';
         }
     }, [isFullscreen, nodes.length, scale]);
-    
+
     // Cleanup: ensure fullscreen is disabled when component unmounts
     useEffect(() => {
         return () => {
@@ -236,17 +236,17 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
     return (
         <div
             ref={containerRef}
-                className={`
+            className={`
                 bg-slate-50 relative overflow-hidden transition-all duration-300 group select-none shadow-inner
                 ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}
-                ${isFullscreen ? 'fixed inset-0 z-[9999] rounded-none' : 'w-full h-full rounded-xl border border-slate-200'}
+                ${isFullscreen ? 'fixed inset-0 z-[9999] rounded-none' : 'w-full h-full'}
              `}
-                onMouseDown={handleCanvasMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onWheel={handleWheel}
-            >
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+        >
             <style>{`
             @keyframes flow {
                to {

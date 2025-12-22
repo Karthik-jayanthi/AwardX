@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FormBuilder, FormField } from './FormBuilder';
+import { FormField, FormPage, FormTheme } from './FormBuilder';
+import { FormPreview } from './FormPreview';
 import { db, Program } from '../../services/demoDb';
 import { FileText, CheckCircle2 } from 'lucide-react';
 import { Button } from '../Button';
@@ -13,6 +14,8 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
   const [savedForms, setSavedForms] = useState<any[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
   const [currentFormFields, setCurrentFormFields] = useState<FormField[]>([]);
+  const [currentPages, setCurrentPages] = useState<FormPage[]>([]);
+  const [currentTheme, setCurrentTheme] = useState<FormTheme | undefined>(undefined);
 
   useEffect(() => {
     if (activeEvent) {
@@ -40,9 +43,16 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
       placeholder: f.placeholder || undefined,
       required: f.isRequired,
       options: f.options || undefined,
+      pageId: f.pageId || 'page-1',
       validation: f.validationRules || undefined,
     }));
+
+    // Load form metadata to get pages and theme
+    const form = db.getFormById(formId);
+
     setCurrentFormFields(formFields);
+    setCurrentPages(form?.pages || []);
+    setCurrentTheme(form?.theme);
     setSelectedFormId(formId);
     if (onFormSelect) {
       onFormSelect(formId);
@@ -53,12 +63,6 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
     loadForm(formId);
   };
 
-  const handleSave = (fields: FormField[]) => {
-    if (selectedFormId) {
-      db.saveFormFields(selectedFormId, fields);
-      setCurrentFormFields(fields);
-    }
-  };
 
   if (!activeEvent) {
     return (
@@ -88,16 +92,15 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
             {savedForms.map((form) => {
               const fields = db.getFormFields(form.id);
               const isSelected = selectedFormId === form.id;
-              
+
               return (
                 <div
                   key={form.id}
                   onClick={() => handleFormSelect(form.id)}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-indigo-500 bg-indigo-50 shadow-sm'
-                      : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
-                  }`}
+                  className={`p-4 rounded-lg border cursor-pointer transition-all ${isSelected
+                    ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+                    : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                    }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
@@ -131,12 +134,13 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
         </div>
       </div>
 
-      {/* Form Builder */}
+      {/* Form Preview */}
       <div className="flex-1 min-w-0">
         {selectedFormId ? (
-          <FormBuilder
-            onSave={handleSave}
-            initialFields={currentFormFields}
+          <FormPreview
+            fields={currentFormFields}
+            pages={currentPages.length > 0 ? currentPages : []}
+            theme={currentTheme}
           />
         ) : (
           <div className="h-full flex items-center justify-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-300">
@@ -144,7 +148,7 @@ export const FormBuilderWithSelector: React.FC<FormBuilderWithSelectorProps> = (
               <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-slate-700 mb-2">No Form Selected</h3>
               <p className="text-sm text-slate-500 mb-4">
-                Select a form from the sidebar to view and edit it, or create a new form in the Form Builder.
+                Select a form from the sidebar to preview it. To create or edit forms, go to <strong>Form Builder</strong> in the sidebar.
               </p>
             </div>
           </div>

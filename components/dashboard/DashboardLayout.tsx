@@ -5,7 +5,7 @@ import {
   BarChart3, Users, Settings, LogOut, Bell, Search,
   Menu, X, Sparkles, LayoutTemplate, MessageSquare, ChevronRight, Share2, Shield, Activity,
   ChevronLeft, ArrowLeft, Trophy, Plus, ChevronDown, Folder, CalendarClock, Settings2, Beaker,
-  UserCog, Edit
+  UserCog, Edit, Workflow
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program, Category, db, PERMISSIONS, Contact } from '../../services/demoDb';
@@ -21,6 +21,7 @@ interface DashboardLayoutProps {
   onChangeView: (view: string) => void;
   onLogout: () => void;
   onSwitchEvent: () => void;
+  noPadding?: boolean;
 }
 
 interface SidebarItemProps {
@@ -132,7 +133,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   activeEvent,
   onChangeView,
   onLogout,
-  onSwitchEvent
+  onSwitchEvent,
+  noPadding = false
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
@@ -209,7 +211,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         }
       }
     };
-    
+
     fetchUserData();
     setAllUsers(db.getContacts().filter(c => c.role !== 'Applicant')); // For quick switch
     if (activeEvent) {
@@ -241,6 +243,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'overview', label: 'Overview', icon: LayoutDashboard, permission: PERMISSIONS.VIEW_OVERVIEW },
     { id: 'program-details', label: 'Program Details', icon: Edit, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'schedule', label: 'Schedule', icon: CalendarClock, permission: PERMISSIONS.MANAGE_PROGRAMS },
+    { id: 'schedule-rounds', label: 'Schedule & Rounds', icon: Workflow, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submission-setup', label: 'Submission Process', icon: Settings2, permission: PERMISSIONS.MANAGE_PROGRAMS },
     { id: 'submissions', label: 'Submissions', icon: FileText, permission: PERMISSIONS.VIEW_SUBMISSIONS },
     { id: 'judging', label: 'Judging', icon: Gavel, permission: PERMISSIONS.VIEW_JUDGING },
@@ -405,6 +408,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-4 lg:gap-6">
+            {/* Header Actions Portal Target */}
+            <div id="dashboard-header-actions" className="flex items-center gap-2" />
+
             {/* PRD 4.8 Test Mode Toggle */}
             <div
               onClick={() => setIsTestMode(!isTestMode)}
@@ -435,9 +441,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </header>
 
         {/* Scrollable Content */}
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+        <main className={`flex-1 overflow-y-auto ${noPadding ? '' : 'p-4 lg:p-8'}`}>
           {isTestMode && (
-            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <div className="mb-6 mx-4 lg:mx-8 mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
               <Beaker className="w-5 h-5 text-amber-600 mt-0.5" />
               <div>
                 <h4 className="text-sm font-bold text-amber-800">You are in Sandbox Mode</h4>
@@ -445,7 +451,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
             </div>
           )}
-          <div className="max-w-7xl mx-auto">
+          <div className={noPadding ? 'h-full' : 'max-w-7xl mx-auto'}>
             {children}
           </div>
         </main>

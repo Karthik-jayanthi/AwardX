@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { db, Category, Program } from '../../services/demoDb';
 import { Folder, ChevronRight, Plus, MoreHorizontal, FileText, Trash2, Edit2, ChevronDown, List, Workflow } from 'lucide-react';
 import { Button } from '../Button';
@@ -186,6 +187,12 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
       loadCategories();
    }, [activeEvent]);
 
+   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+   useEffect(() => {
+      setPortalTarget(document.getElementById('dashboard-header-actions'));
+   }, []);
+
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
       if (activeEvent && newCategory.title) {
@@ -214,14 +221,9 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
    const parentCategory = categories.find(c => c.id === newCategory.parentId);
 
    return (
-      <div className={`flex flex-col ${viewMode === 'workflow' ? 'h-[calc(100vh-6rem)] -m-4 lg:-m-8' : 'h-full space-y-8 pb-12'}`}>
-         {/* Header & Controls */}
-         <div className={`flex justify-between items-center shrink-0 ${viewMode === 'workflow' ? 'p-4 lg:p-8 bg-white border-b border-slate-200 z-10' : ''}`}>
-            <div>
-               <h1 className="text-2xl font-bold text-slate-900">Awards & Categories</h1>
-               <p className="text-slate-500">Structure your event into categories and subcategories.</p>
-            </div>
-
+      <div className={viewMode === 'list' ? 'p-4 lg:p-8 max-w-7xl mx-auto min-h-full' : 'h-full flex flex-col'}>
+         {/* Portal Controls to Header */}
+         {portalTarget && createPortal(
             <div className="flex items-center gap-3">
                {/* View Switcher */}
                <div className="bg-slate-100 p-1 rounded-lg flex items-center border border-slate-200">
@@ -244,8 +246,9 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
                <Button className="flex items-center gap-2" onClick={() => openModal('')}>
                   <Plus className="w-4 h-4" /> Add Root Category
                </Button>
-            </div>
-         </div>
+            </div>,
+            portalTarget
+         )}
 
          {/* View Content */}
          <AnimatePresence mode="wait">
@@ -255,34 +258,43 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({ activeEvent }) =
                animate={{ opacity: 1 }}
                exit={{ opacity: 0 }}
                transition={{ duration: 0.2 }}
-               className={`flex-1 min-h-0 ${viewMode === 'workflow' ? 'relative' : ''}`}
+               className={`flex-1 min-h-0 ${viewMode === 'workflow' ? 'h-full' : ''}`}
             >
                {viewMode === 'list' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                     {rootCategories.map(cat => (
-                        <CategoryCard
-                           key={cat.id}
-                           category={cat}
-                           allCategories={categories}
-                           onAddSub={openModal}
-                           onDelete={handleDelete}
-                        />
-                     ))}
+                  <div className="space-y-8 pb-12">
+                     <div>
+                        <h1 className="text-2xl font-bold text-slate-900">Awards & Categories</h1>
+                        <p className="text-slate-500">Structure your event into categories and subcategories.</p>
+                     </div>
 
-                     <button
-                        onClick={() => openModal('')}
-                        className="border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-8 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all min-h-[300px] group"
-                     >
-                        <div className="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-3 transition-colors">
-                           <Plus className="w-6 h-6" />
-                        </div>
-                        <span className="font-bold">Create Category</span>
-                     </button>
+                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                        {rootCategories.map(cat => (
+                           <CategoryCard
+                              key={cat.id}
+                              category={cat}
+                              allCategories={categories}
+                              onAddSub={openModal}
+                              onDelete={handleDelete}
+                           />
+                        ))}
+
+                        <button
+                           onClick={() => openModal('')}
+                           className="border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-8 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50 transition-all min-h-[300px] group"
+                        >
+                           <div className="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center mb-3 transition-colors">
+                              <Plus className="w-6 h-6" />
+                           </div>
+                           <span className="font-bold">Create Category</span>
+                        </button>
+                     </div>
                   </div>
                )}
 
                {viewMode === 'workflow' && (
-                  <CategoriesWorkflow categories={categories} onAddSub={openModal} programId={activeEvent?.id} />
+                  <div className="h-full w-full bg-slate-50">
+                     <CategoriesWorkflow categories={categories} onAddSub={openModal} programId={activeEvent?.id} />
+                  </div>
                )}
             </motion.div>
          </AnimatePresence>
