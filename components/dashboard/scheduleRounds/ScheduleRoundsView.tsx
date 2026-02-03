@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Program } from '../../../services/models';
 import { WorkflowView } from './WorkflowView';
 import { TileView } from './TileView';
-import { Layout, Grid, Workflow, Plus } from 'lucide-react';
+import { Grid, Workflow, Plus, Sparkles } from 'lucide-react';
 import { Button } from '../../Button';
 import { Round, RoundEdge } from '../../../types/scheduleRounds';
 import { scheduleRoundsService } from '../../../services/scheduleRoundsDb';
+import { ExtensionsMarketplaceModal } from './ExtensionsMarketplaceModal';
 
 interface ScheduleRoundsViewProps {
   activeEvent: Program | null;
@@ -19,6 +20,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
   const [edges, setEdges] = useState<RoundEdge[]>([]);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExtensionsOpen, setIsExtensionsOpen] = useState(false);
 
   const loadWorkflow = useCallback(async () => {
     if (!activeEvent) return;
@@ -254,6 +256,15 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
           <p className="text-sm text-slate-500 mt-1">Configure evaluation rounds and workflow</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setIsExtensionsOpen(true)}
+            className="px-4 py-2 text-xs shadow-none"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Extensions
+          </Button>
+
           <div className="flex bg-slate-100 rounded-lg p-1 border border-slate-200">
             <Button
               variant={viewMode === 'tile' ? 'primary' : 'ghost'}
@@ -287,6 +298,19 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({ activeEv
           </Button>
         </div>
       </div>
+
+      {activeEvent && (
+        <ExtensionsMarketplaceModal
+          isOpen={isExtensionsOpen}
+          onClose={() => setIsExtensionsOpen(false)}
+          programId={activeEvent.id}
+          existingRounds={rounds}
+          existingEdges={edges}
+          onApplied={async () => {
+            await loadWorkflow();
+          }}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 overflow-hidden">
