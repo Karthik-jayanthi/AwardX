@@ -4,6 +4,8 @@ import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Cale
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
+import { SkeletonLoader } from '../SkeletonLoader';
+import { useQuery } from '@tanstack/react-query';
 
 interface DashboardOverviewProps {
   activeEvent?: Program | null;
@@ -35,6 +37,16 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, color, onClick
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEvent, onNavigate }) => {
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const quickActionRef = useRef<HTMLDivElement>(null);
+
+  const emptyStats = {
+    totalSubmissions: 0,
+    activePrograms: 0,
+    pendingReview: 0,
+    revenue: 0,
+    activeJudges: 0,
+    submissionTrend: [],
+    categorySplit: [],
+  };
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -72,37 +84,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
     }
   };
 
-  const [stats, setStats] = useState<{
-    totalSubmissions: number;
-    activePrograms: number;
-    pendingReview: number;
-    revenue: number;
-    activeJudges: number;
-    submissionTrend: { name: string; entries: number }[];
-    categorySplit: { name: string; value: number }[];
-  }>({
-    totalSubmissions: 0,
-    activePrograms: 0,
-    pendingReview: 0,
-    revenue: 0,
-    activeJudges: 0,
-    submissionTrend: [],
-    categorySplit: []
+  const statsQuery = useQuery({
+    queryKey: ['dashboard-overview-stats', activeEvent?.id || 'all'],
+    queryFn: () => databaseService.getStats(activeEvent?.id),
+    refetchInterval: 5000,
   });
 
-  useEffect(() => {
-    const updateStats = async () => {
-      try {
-        const statsData = await databaseService.getStats(activeEvent?.id);
-        setStats(statsData as any);
-      } catch (error) {
-        console.error('Failed to load stats:', error);
-      }
-    };
-    updateStats();
-    const interval = setInterval(updateStats, 5000); // Update every 5 seconds
-    return () => clearInterval(interval);
-  }, [activeEvent]);
+  const isLoading = statsQuery.isLoading;
+  const stats = (statsQuery.data as any) || emptyStats;
 
   return (
     <div className="space-y-8">
@@ -162,6 +151,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {isLoading && (
+          <>
+            <SkeletonLoader className="h-36" />
+            <SkeletonLoader className="h-36" />
+            <SkeletonLoader className="h-36" />
+            <SkeletonLoader className="h-36" />
+          </>
+        )}
+        {!isLoading && (
+          <>
         <StatCard
           title={activeEvent?.type === 'Grant' ? "Applications" : "Total Submissions"}
           value={stats.totalSubmissions}
@@ -198,10 +197,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
           color="text-orange-600 bg-orange-600"
           onClick={() => onNavigate?.('schedule-rounds')}
         />
+          </>
+        )}
       </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {isLoading && (
+          <>
+            <SkeletonLoader className="lg:col-span-2 h-[360px]" />
+            <SkeletonLoader className="h-[360px]" />
+          </>
+        )}
+        {!isLoading && (
+          <>
         {/* Main Chart */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex justify-between items-center mb-6">
@@ -248,6 +257,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
             </ResponsiveContainer>
           </div>
         </div>
+          </>
+        )}
       </div>
     </div>
   );

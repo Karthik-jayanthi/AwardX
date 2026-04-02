@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
     // Avoid hard dependency on reading `.env` files at config-load time.
@@ -22,7 +23,7 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [tailwindcss(), react()],
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

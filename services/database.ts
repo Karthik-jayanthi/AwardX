@@ -14,9 +14,62 @@ import {
   settings,
   forms,
 } from './supabase';
-import { getCurrentUserId } from './supabase';
+import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { Program, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export interface DashboardNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  programId: string | null;
+  createdAt: string;
+}
+
+export interface MySubmissionPortalItem {
+  id: string;
+  title: string;
+  status: string;
+  submittedAt: string;
+  updatedAt: string;
+  programTitle: string;
+  paymentStatus: string;
+  paymentAmount: number;
+  formId: string | null;
+  feedbackItems: Array<{
+    judgeName: string;
+    recommendation: string | null;
+    overallComment: string | null;
+    scoredCriteriaCount: number;
+  }>;
+  feedbackCount: number;
+  canWithdraw: boolean;
+}
+
+export interface ApplicantDraftItem {
+  id: string;
+  formId: string;
+  formTitle: string;
+  programTitle: string;
+  currentPage: number;
+  updatedAt: string;
+  fieldCount: number;
+}
+
+export interface ApplicantPortalData {
+  submissions: MySubmissionPortalItem[];
+  drafts: ApplicantDraftItem[];
+}
 
 // --- Event Overview Page Service ---
 export const programPages = {
@@ -878,10 +931,130 @@ class DatabaseService {
     return data.map((s: any) => this.mapSubmission(s));
   }
 
+  async getSubmissionsPaginated(options?: {
+    programId?: string;
+    page?: number;
+    pageSize?: number;
+    search?: string;
+  }): Promise<PaginatedResult<Submission>> {
+    if (!supabase) {
+      return { items: [], total: 0, page: 1, pageSize: 20, hasMore: false };
+    }
+
+    const page = Math.max(1, options?.page || 1);
+    const pageSize = Math.max(1, Math.min(100, options?.pageSize || 20));
+    const offset = (page - 1) * pageSize;
+
+    const orgId = await getCurrentOrgId();
+    if (!orgId) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    const { data: orgPrograms } = await supabase
+      .from('programs')
+      .select('id')
+      .eq('organization_id', orgId);
+
+    const programIds = (orgPrograms || []).map((p: any) => p.id);
+    if (programIds.length === 0) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    let query = supabase
+      .from('submissions')
+      .select(
+        `
+        *,
+        categories(title),
+        submission_judges(judge_id)
+      `,
+        { count: 'exact' }
+      )
+      .in('program_id', programIds)
+      .order('submitted_at', { ascending: false });
+
+    if (options?.programId) {
+      if (!programIds.includes(options.programId)) {
+        return { items: [], total: 0, page, pageSize, hasMore: false };
+      }
+      query = query.eq('program_id', options.programId);
+    }
+
+    const search = options?.search?.trim();
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,applicant_name.ilike.%${search}%,applicant_email.ilike.%${search}%`);
+    }
+
+    const { data, error, count } = await query.range(offset, offset + pageSize - 1);
+    if (error || !data) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    const items = data.map((s: any) => this.mapSubmission(s));
+    const total = count || 0;
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: offset + items.length < total,
+    };
+  }
+
   async getPublicSubmissions(programId: string): Promise<Submission[]> {
     const { data, error } = await submissions.getPublic(programId);
     if (error || !data) return [];
     return data.map((s: any) => this.mapSubmission(s));
+  }
+
+  async getMySubmissions(): Promise<MySubmissionPortalItem[]> {
+    const portalData = await this.getMySubmissionPortalData();
+    return portalData.submissions;
+  }
+
+  private async getAuthenticatedHeaders() {
+    const { session } = await auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    };
+  }
+
+  async getMySubmissionPortalData(): Promise<ApplicantPortalData> {
+    const headers = await this.getAuthenticatedHeaders();
+    const response = await fetch('/api/submissions/my', {
+      method: 'GET',
+      headers,
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to load applicant portal data');
+    }
+
+    return {
+      submissions: payload?.submissions || [],
+      drafts: payload?.drafts || [],
+    };
+  }
+
+  async withdrawMySubmission(submissionId: string, reason?: string): Promise<void> {
+    const headers = await this.getAuthenticatedHeaders();
+    const response = await fetch('/api/submissions/withdraw', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ submissionId, reason }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to withdraw submission');
+    }
   }
 
   async vote(submissionId: string) {
@@ -923,6 +1096,7 @@ class DatabaseService {
       'shortlisted': 'Shortlisted',
       'accepted': 'Accepted',
       'rejected': 'Rejected',
+      'withdrawn': 'Withdrawn',
     };
     return statusMap[status?.toLowerCase()] || 'Pending';
   }
@@ -1054,6 +1228,62 @@ class DatabaseService {
       assignedCount: j.assigned_count || 0,
       completedCount: j.completed_count || 0,
     }));
+  }
+
+  async getJudgesPaginated(options?: {
+    programId?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedResult<Judge>> {
+    if (!supabase) {
+      return { items: [], total: 0, page: 1, pageSize: 12, hasMore: false };
+    }
+
+    const page = Math.max(1, options?.page || 1);
+    const pageSize = Math.max(1, Math.min(50, options?.pageSize || 12));
+    const offset = (page - 1) * pageSize;
+    const orgId = await getCurrentOrgId();
+
+    if (!orgId) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    let query = supabase
+      .from('judges')
+      .select('*', { count: 'exact' })
+      .eq('organization_id', orgId)
+      .order('name');
+
+    if (options?.programId) {
+      query = query.eq('program_id', options.programId);
+    }
+
+    const { data, error, count } = await query.range(offset, offset + pageSize - 1);
+    if (error || !data) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    const items: Judge[] = data.map((j: any) => ({
+      id: j.id,
+      name: j.name,
+      avatar: j.avatar_url || '',
+      email: j.email,
+      status: this.mapJudgeStatus(j.status) as Judge['status'],
+      progress: j.completed_count && j.assigned_count
+        ? Math.round((j.completed_count / j.assigned_count) * 100)
+        : 0,
+      assignedCount: j.assigned_count || 0,
+      completedCount: j.completed_count || 0,
+    }));
+
+    const total = count || 0;
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: offset + items.length < total,
+    };
   }
 
   async createJudge(payload: { name: string; email: string; bio?: string; programId?: string }) {
@@ -1247,6 +1477,158 @@ class DatabaseService {
     }));
   }
 
+  async getLogsPaginated(options?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    type?: 'create' | 'update' | 'delete' | 'warning';
+  }): Promise<PaginatedResult<Log>> {
+    if (!supabase) {
+      return { items: [], total: 0, page: 1, pageSize: 20, hasMore: false };
+    }
+
+    const orgId = await getCurrentOrgId();
+    const page = Math.max(1, options?.page || 1);
+    const pageSize = Math.max(1, Math.min(100, options?.pageSize || 20));
+    const offset = (page - 1) * pageSize;
+
+    if (!orgId) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    let query = supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact' })
+      .eq('organization_id', orgId)
+      .order('created_at', { ascending: false });
+
+    if (options?.type) {
+      query = query.eq('action_type', options.type);
+    }
+
+    const search = options?.search?.trim();
+    if (search) {
+      query = query.or(`action.ilike.%${search}%,details.ilike.%${search}%,user_name.ilike.%${search}%`);
+    }
+
+    const { data, error, count } = await query.range(offset, offset + pageSize - 1);
+    if (error || !data) {
+      return { items: [], total: 0, page, pageSize, hasMore: false };
+    }
+
+    const items: Log[] = data.map((l: any) => ({
+      id: l.id,
+      action: l.action,
+      user: l.user_name || 'User',
+      userAvatar: l.user_avatar || '',
+      details: l.details || '',
+      timestamp: l.created_at ? new Date(l.created_at).toLocaleString() : '',
+      type: (l.action_type === 'delete' ? 'delete' : l.action_type === 'warning' ? 'warning' : l.action_type === 'create' ? 'create' : 'update') as Log['type'],
+    }));
+
+    const total = count || 0;
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: offset + items.length < total,
+    };
+  }
+
+  async getNotifications(options?: {
+    programId?: string;
+    limit?: number;
+    unreadOnly?: boolean;
+  }): Promise<DashboardNotification[]> {
+    if (!supabase) return [];
+
+    try {
+      const orgId = await getCurrentOrgId();
+      if (!orgId) return [];
+
+      const userId = await getCurrentUserId();
+      let query = supabase
+        .from('notifications')
+        .select('*')
+        .eq('organization_id', orgId)
+        .order('created_at', { ascending: false });
+
+      if (options?.programId) {
+        query = query.eq('program_id', options.programId);
+      }
+
+      if (options?.unreadOnly) {
+        query = query.eq('is_read', false);
+      }
+
+      // Show org-wide notifications plus user-specific notifications.
+      if (userId) {
+        query = query.or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`);
+      }
+
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+
+      const { data, error } = await query;
+      if (error || !data) return [];
+
+      return data.map((n: any) => ({
+        id: n.id,
+        type: n.type || 'system',
+        title: n.title || 'Notification',
+        body: n.body || '',
+        isRead: !!n.is_read,
+        programId: n.program_id || null,
+        createdAt: n.created_at || new Date().toISOString(),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async markNotificationRead(notificationId: string) {
+    if (!supabase) return;
+
+    try {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('id', notificationId);
+    } catch {
+      // Ignore best-effort update failures.
+    }
+  }
+
+  async markAllNotificationsRead(programId?: string) {
+    if (!supabase) return;
+
+    try {
+      const orgId = await getCurrentOrgId();
+      if (!orgId) return;
+
+      const userId = await getCurrentUserId();
+      let query = supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('organization_id', orgId)
+        .eq('is_read', false);
+
+      if (programId) {
+        query = query.eq('program_id', programId);
+      }
+
+      if (userId) {
+        query = query.or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`);
+      }
+
+      await query;
+    } catch {
+      // Ignore best-effort update failures.
+    }
+  }
+
   // Reach
   async getSocialAccounts(): Promise<SocialAccount[]> {
     const { data, error } = await socialAccounts.getAll();
@@ -1387,7 +1769,14 @@ class DatabaseService {
     });
   }
 
-  async submitFormResponse(formId: string, formData: Record<string, any>) {
+  async submitFormResponse(
+    formId: string,
+    formData: Record<string, any>,
+    options?: {
+      paymentRequired?: boolean;
+      paymentAmount?: number;
+    }
+  ) {
     if (!supabase) throw new Error('Supabase not configured');
 
     // Get the form to find the program_id
@@ -1421,6 +1810,8 @@ class DatabaseService {
       program_id: form.program_id,
       title: form.title || 'Form Submission',
       description: `Form submission for ${form.title}`,
+      payment_status: options?.paymentRequired ? 'pending' : 'paid',
+      payment_amount: options?.paymentRequired ? Number(options.paymentAmount || 0) : 0,
       submission_data: {
         form_id: formId,
         form_title: form.title,

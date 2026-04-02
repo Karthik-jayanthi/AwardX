@@ -138,255 +138,18 @@ CREATE TABLE public.features (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT features_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.how_it_works_steps (
+CREATE TABLE public.form_analytics (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  step_number integer NOT NULL,
-  title character varying NOT NULL,
-  description text,
-  icon character varying,
-  items jsonb DEFAULT '[]'::jsonb,
-  sort_order integer DEFAULT 0,
-  is_active boolean DEFAULT true,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT how_it_works_steps_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.judge_comments (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  submission_judge_id uuid UNIQUE,
-  overall_comment text,
-  private_notes text,
-  recommendation character varying,
-  submitted_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT judge_comments_pkey PRIMARY KEY (id),
-  CONSTRAINT judge_comments_submission_judge_id_fkey FOREIGN KEY (submission_judge_id) REFERENCES public.submission_judges(id)
-);
-CREATE TABLE public.judges (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid,
+  form_id uuid NOT NULL,
+  event_type character varying NOT NULL,
   user_id uuid,
-  name character varying NOT NULL,
-  email character varying NOT NULL,
-  avatar_url text,
-  bio text,
-  status character varying DEFAULT 'invited'::character varying,
-  invited_at timestamp with time zone DEFAULT now(),
-  accepted_at timestamp with time zone,
-  assigned_count integer DEFAULT 0,
-  completed_count integer DEFAULT 0,
-  program_id uuid,
-  CONSTRAINT judges_pkey PRIMARY KEY (id),
-  CONSTRAINT judges_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT judges_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
-  CONSTRAINT judges_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
-);
-CREATE TABLE public.judging_criteria (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  program_id uuid,
-  name character varying NOT NULL,
-  description text,
-  weight integer DEFAULT 100,
-  min_score integer DEFAULT 0,
-  max_score integer DEFAULT 10,
-  sort_order integer DEFAULT 0,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT judging_criteria_pkey PRIMARY KEY (id),
-  CONSTRAINT judging_criteria_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
-);
-CREATE TABLE public.message_threads (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid,
-  subject character varying,
-  thread_type character varying DEFAULT 'direct'::character varying,
-  related_submission_id uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT message_threads_pkey PRIMARY KEY (id),
-  CONSTRAINT message_threads_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT message_threads_related_submission_id_fkey FOREIGN KEY (related_submission_id) REFERENCES public.submissions(id)
-);
-CREATE TABLE public.messages (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  thread_id uuid,
-  sender_id uuid,
-  content text NOT NULL,
-  is_system_message boolean DEFAULT false,
-  attachments jsonb DEFAULT '[]'::jsonb,
-  sent_at timestamp with time zone DEFAULT now(),
-  sender_name character varying,
-  sender_avatar text,
-  CONSTRAINT messages_pkey PRIMARY KEY (id),
-  CONSTRAINT messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.message_threads(id),
-  CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.profiles(id)
-);
-CREATE TABLE public.organization_invites (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid NOT NULL,
-  email character varying NOT NULL,
-  role_id uuid,
-  invited_by uuid,
-  status character varying DEFAULT 'pending'::character varying,
-  token uuid NOT NULL DEFAULT uuid_generate_v4() UNIQUE,
-  invited_at timestamp with time zone DEFAULT now(),
-  accepted_at timestamp with time zone,
-  program_id uuid,
-  CONSTRAINT organization_invites_pkey PRIMARY KEY (id),
-  CONSTRAINT organization_invites_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT organization_invites_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id),
-  CONSTRAINT organization_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id),
-  CONSTRAINT organization_invites_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
-);
-CREATE TABLE public.organization_members (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid,
-  user_id uuid,
-  role_id uuid,
-  status character varying DEFAULT 'active'::character varying,
-  invited_by uuid,
-  invited_at timestamp with time zone,
-  joined_at timestamp with time zone DEFAULT now(),
-  program_id uuid,
-  CONSTRAINT organization_members_pkey PRIMARY KEY (id),
-  CONSTRAINT organization_members_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT organization_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
-
-CREATE TABLE public.audit_logs (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid,
-  user_id uuid,
-  action character varying NOT NULL,
-  action_type character varying NOT NULL,
-  resource_type character varying,
-  resource_id uuid,
-  details text,
+  session_id text,
+  page_reached integer DEFAULT 0,
   metadata jsonb DEFAULT '{}'::jsonb,
-  ip_address inet,
-  user_agent text,
-  user_name character varying,
-  user_avatar text,
   created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT audit_logs_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
-);
-CREATE TABLE public.campaign_templates (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid,
-  title character varying NOT NULL,
-  description text,
-  content text NOT NULL,
-  icon character varying,
-  color character varying,
-  is_system boolean DEFAULT false,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT campaign_templates_pkey PRIMARY KEY (id),
-  CONSTRAINT campaign_templates_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
-);
-CREATE TABLE public.case_studies (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  title character varying NOT NULL,
-  slug character varying NOT NULL UNIQUE,
-  industry character varying,
-  company_name character varying,
-  company_logo_url text,
-  cover_image_url text,
-  color character varying,
-  challenge text,
-  solution text,
-  results text,
-  quote text,
-  quote_author character varying,
-  quote_author_role character varying,
-  stats jsonb DEFAULT '[]'::jsonb,
-  is_featured boolean DEFAULT false,
-  is_active boolean DEFAULT true,
-  published_at timestamp with time zone,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT case_studies_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.categories (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  program_id uuid,
-  parent_id uuid,
-  title character varying NOT NULL,
-  description text,
-  icon character varying,
-  color character varying,
-  sort_order integer DEFAULT 0,
-  entries_count integer DEFAULT 0,
-  max_entries integer,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT categories_pkey PRIMARY KEY (id),
-  CONSTRAINT categories_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
-  CONSTRAINT categories_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.categories(id)
-);
-CREATE TABLE public.contact_custom_fields (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  contact_id uuid,
-  field_name character varying NOT NULL,
-  field_value text,
-  CONSTRAINT contact_custom_fields_pkey PRIMARY KEY (id),
-  CONSTRAINT contact_custom_fields_contact_id_fkey FOREIGN KEY (contact_id) REFERENCES public.contacts(id)
-);
-CREATE TABLE public.contact_messages (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  name text NOT NULL,
-  email text NOT NULL,
-  message text NOT NULL,
-  CONSTRAINT contact_messages_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.contacts (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  organization_id uuid,
-  user_id uuid,
-  name character varying NOT NULL,
-  email character varying NOT NULL,
-  phone character varying,
-  avatar_url text,
-  source character varying,
-  survey_answer text,
-  tags ARRAY,
-  status character varying DEFAULT 'active'::character varying,
-  last_active_at timestamp with time zone,
-  joined_at timestamp with time zone DEFAULT now(),
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT contacts_pkey PRIMARY KEY (id),
-  CONSTRAINT contacts_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
-  CONSTRAINT contacts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
-);
-CREATE TABLE public.event_types (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  name character varying NOT NULL UNIQUE,
-  icon character varying,
-  description text,
-  category character varying,
-  CONSTRAINT event_types_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.faqs (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  question text NOT NULL,
-  answer text NOT NULL,
-  category character varying,
-  sort_order integer DEFAULT 0,
-  is_active boolean DEFAULT true,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT faqs_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.features (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  title character varying NOT NULL,
-  description text,
-  icon character varying,
-  color character varying,
-  items jsonb DEFAULT '[]'::jsonb,
-  category character varying,
-  sort_order integer DEFAULT 0,
-  is_active boolean DEFAULT true,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT features_pkey PRIMARY KEY (id)
+  CONSTRAINT form_analytics_pkey PRIMARY KEY (id),
+  CONSTRAINT form_analytics_form_id_fkey FOREIGN KEY (form_id) REFERENCES public.program_forms(id),
+  CONSTRAINT form_analytics_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.how_it_works_steps (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -430,6 +193,20 @@ CREATE TABLE public.judges (
   CONSTRAINT judges_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id),
   CONSTRAINT judges_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
   CONSTRAINT judges_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
+);
+CREATE TABLE public.judging_config (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid NOT NULL UNIQUE,
+  scoring_system character varying DEFAULT 'numeric'::character varying,
+  pass_threshold integer DEFAULT 70,
+  blind_judging boolean DEFAULT false,
+  allow_comments boolean DEFAULT true,
+  auto_assign boolean DEFAULT false,
+  max_judges_per_submission integer DEFAULT 3,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT judging_config_pkey PRIMARY KEY (id),
+  CONSTRAINT judging_config_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
 CREATE TABLE public.judging_criteria (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -564,6 +341,7 @@ CREATE TABLE public.program_faqs (
   sort_order integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  is_visible boolean DEFAULT true,
   CONSTRAINT program_faqs_pkey PRIMARY KEY (id),
   CONSTRAINT program_faqs_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
@@ -604,6 +382,9 @@ CREATE TABLE public.program_page_configs (
   published_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  seo_title text,
+  seo_description text,
+  published_version integer DEFAULT 1,
   CONSTRAINT program_page_configs_pkey PRIMARY KEY (id),
   CONSTRAINT program_page_configs_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
@@ -618,6 +399,8 @@ CREATE TABLE public.program_page_sections (
   is_visible boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  subtitle text,
+  is_draft boolean DEFAULT false,
   CONSTRAINT program_page_sections_pkey PRIMARY KEY (id),
   CONSTRAINT program_page_sections_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
@@ -648,6 +431,8 @@ CREATE TABLE public.program_sponsors (
   sort_order integer DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  tier_label text,
+  is_active boolean DEFAULT true,
   CONSTRAINT program_sponsors_pkey PRIMARY KEY (id),
   CONSTRAINT program_sponsors_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
 );
@@ -668,6 +453,32 @@ CREATE TABLE public.program_templates (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT program_templates_pkey PRIMARY KEY (id),
   CONSTRAINT program_templates_event_type_id_fkey FOREIGN KEY (event_type_id) REFERENCES public.event_types(id)
+);
+CREATE TABLE public.program_timeline_milestones (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid NOT NULL,
+  title text NOT NULL,
+  date text,
+  description text,
+  icon text,
+  sort_order integer DEFAULT 0,
+  is_visible boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT program_timeline_milestones_pkey PRIMARY KEY (id),
+  CONSTRAINT program_timeline_milestones_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id)
+);
+CREATE TABLE public.program_workflow_extensions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid NOT NULL,
+  extension_id text NOT NULL,
+  version text NOT NULL DEFAULT '1.0.0'::text,
+  config jsonb DEFAULT '{}'::jsonb,
+  installed_at timestamp with time zone DEFAULT now(),
+  installed_by uuid,
+  CONSTRAINT program_workflow_extensions_pkey PRIMARY KEY (id),
+  CONSTRAINT program_workflow_extensions_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
+  CONSTRAINT program_workflow_extensions_installed_by_fkey FOREIGN KEY (installed_by) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.programs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -793,6 +604,17 @@ CREATE TABLE public.scores (
   CONSTRAINT scores_submission_judge_id_fkey FOREIGN KEY (submission_judge_id) REFERENCES public.submission_judges(id),
   CONSTRAINT scores_criterion_id_fkey FOREIGN KEY (criterion_id) REFERENCES public.judging_criteria(id)
 );
+CREATE TABLE public.slug_history (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  program_id uuid NOT NULL,
+  old_slug character varying NOT NULL,
+  new_slug character varying NOT NULL,
+  changed_at timestamp with time zone DEFAULT now(),
+  changed_by uuid,
+  CONSTRAINT slug_history_pkey PRIMARY KEY (id),
+  CONSTRAINT slug_history_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
+  CONSTRAINT slug_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.social_accounts (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   organization_id uuid,
@@ -807,6 +629,19 @@ CREATE TABLE public.social_accounts (
   connected_at timestamp with time zone DEFAULT now(),
   CONSTRAINT social_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT social_accounts_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(id)
+);
+CREATE TABLE public.submission_drafts (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  form_id uuid NOT NULL,
+  user_id uuid,
+  session_id text,
+  draft_data jsonb DEFAULT '{}'::jsonb,
+  current_page integer DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT submission_drafts_pkey PRIMARY KEY (id),
+  CONSTRAINT submission_drafts_form_id_fkey FOREIGN KEY (form_id) REFERENCES public.program_forms(id),
+  CONSTRAINT submission_drafts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.submission_files (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -852,7 +687,6 @@ CREATE TABLE public.submissions (
   updated_at timestamp with time zone DEFAULT now(),
   applicant_name character varying,
   applicant_email character varying,
-  vote_count integer DEFAULT 0,
   votes_count integer DEFAULT 0,
   CONSTRAINT submissions_pkey PRIMARY KEY (id),
   CONSTRAINT submissions_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.programs(id),
@@ -905,6 +739,18 @@ CREATE TABLE public.user_settings (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT user_settings_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.user_workspace_state (
+  user_id uuid NOT NULL,
+  active_program_id uuid,
+  current_view character varying DEFAULT 'overview'::character varying,
+  sidebar_collapsed boolean DEFAULT false,
+  selected_form_ids jsonb DEFAULT '{}'::jsonb,
+  preferences jsonb DEFAULT '{}'::jsonb,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_workspace_state_pkey PRIMARY KEY (user_id),
+  CONSTRAINT user_workspace_state_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT user_workspace_state_active_program_id_fkey FOREIGN KEY (active_program_id) REFERENCES public.programs(id)
 );
 CREATE TABLE public.winner_announcements (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

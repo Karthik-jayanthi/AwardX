@@ -1,0 +1,34 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  uptime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate base URL configured
+        run: |
+          if [ -z "${UPTIME_BASE_URL}" ]; then
+            echo "UPTIME_BASE_URL is not set"
+            exit 1
+          fi
+        env:
+          UPTIME_BASE_URL: ${{ secrets.UPTIME_BASE_URL }}
+
+      - name: Check API health
+        run: curl -fsSL "${UPTIME_BASE_URL}/api/health" > /dev/null
+        env:
+          UPTIME_BASE_URL: ${{ secrets.UPTIME_BASE_URL }}
+
+      - name: Check public program route
+        run: curl -fsSL "${UPTIME_BASE_URL}/program" > /dev/null
+        env:
+          UPTIME_BASE_URL: ${{ secrets.UPTIME_BASE_URL }}
+
+      - name: Check app landing page
+        run: curl -fsSL "${UPTIME_BASE_URL}/" > /dev/null
+        env:
+          UPTIME_BASE_URL: ${{ secrets.UPTIME_BASE_URL }}

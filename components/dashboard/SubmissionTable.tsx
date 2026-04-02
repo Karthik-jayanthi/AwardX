@@ -1,13 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
-import { MoreHorizontal, Filter, Download, Eye, Calendar, Search, ChevronDown, User, Plus, CheckSquare, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, ExternalLink, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Filter, Download, Eye, Calendar, Search, ChevronDown, User, Plus, Trash2, CheckCircle, XCircle, Gavel, ArrowUpDown, MoreVertical, Sparkles } from 'lucide-react';
 
 import { db } from '../../services/database';
-import { Submission, Judge, Program } from '../../services/models';
+import { Program, Submission } from '../../services/models';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SubmissionDetailModal } from './SubmissionDetailModal';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { TableSkeleton } from '../SkeletonLoader';
+import { realtime } from '../../services/supabase';
 
 const StatusBadge = ({ status }: { status: string }) => {
    const variants: any = {
@@ -53,8 +56,7 @@ interface SubmissionTableProps {
 }
 
 export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent }) => {
-   const [submissions, setSubmissions] = useState<Submission[]>([]);
-   const [judges, setJudges] = useState<Judge[]>([]);
+   const queryClient = useQueryClient();
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -62,18 +64,73 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
    const [newSub, setNewSub] = useState({ title: '', applicant: '', category: 'General', status: 'Pending' as const });
    const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
+   const [searchTerm, setSearchTerm] = useState('');
+   const [debouncedSearch, setDebouncedSearch] = useState('');
+   const [page, setPage] = useState(1);
+   const pageSize = 15;
 
    useEffect(() => {
-      const load = async () => {
-         const [subs, js] = await Promise.all([
-            db.getSubmissions(activeEvent?.id),
-            db.getJudges(activeEvent?.id)
-         ]);
-         setSubmissions(subs);
-         setJudges(js);
+      const timer = window.setTimeout(() => {
+         setDebouncedSearch(searchTerm.trim());
+      }, 300);
+
+      return () => {
+         window.clearTimeout(timer);
       };
-      load();
-   }, [activeEvent]);
+   }, [searchTerm]);
+
+   useEffect(() => {
+      setPage(1);
+   }, [debouncedSearch, activeEvent?.id]);
+
+   useEffect(() => {
+      setSelectedIds([]);
+   }, [page]);
+
+   const submissionsQuery = useQuery({
+      queryKey: ['submissions', activeEvent?.id || 'all', page, pageSize, debouncedSearch],
+      queryFn: () => db.getSubmissionsPaginated({
+         programId: activeEvent?.id,
+         page,
+         pageSize,
+         search: debouncedSearch,
+      }),
+   });
+
+   const judgesQuery = useQuery({
+      queryKey: ['judges', activeEvent?.id || 'all'],
+      queryFn: () => db.getJudges(activeEvent?.id),
+   });
+
+   useEffect(() => {
+      if (!activeEvent?.id) return;
+
+      const channel = realtime.subscribeToSubmissions(activeEvent.id, () => {
+         queryClient.invalidateQueries({ queryKey: ['submissions', activeEvent.id] });
+      });
+
+      return () => {
+         realtime.unsubscribe(channel);
+      };
+   }, [activeEvent?.id, queryClient]);
+
+   const submissions = submissionsQuery.data?.items || [];
+   const judges = judgesQuery.data || [];
+   const total = submissionsQuery.data?.total || 0;
+   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+   const isLoading = submissionsQuery.isLoading || judgesQuery.isLoading;
+   const isSearching = debouncedSearch.length > 0;
+
+   const visiblePageNumbers = useMemo(() => {
+      const start = Math.max(1, page - 2);
+      const end = Math.min(totalPages, start + 4);
+      return Array.from({ length: end - start + 1 }).map((_, idx) => start + idx);
+   }, [page, totalPages]);
+
+   const refreshSubmissions = async () => {
+      await queryClient.invalidateQueries({ queryKey: ['submissions', activeEvent?.id || 'all'] });
+      setSelectedIds([]);
+   };
 
    const handleCreate = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -83,7 +140,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
          ...newSub,
          programId: activeEvent?.id
       } as any);
-      setSubmissions(await db.getSubmissions(activeEvent?.id));
+      await refreshSubmissions();
       setIsModalOpen(false);
       setNewSub({ title: '', applicant: '', category: 'General', status: 'Pending' });
    };
@@ -128,19 +185,55 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
          await db.bulkUpdateSubmissions(selectedIds, { status: statusMap[action] } as any);
       }
 
-      // Refresh
-      setSubmissions(await db.getSubmissions(activeEvent?.id));
-      setSelectedIds([]);
+      await refreshSubmissions();
    };
 
    const handleAssignJudges = async () => {
       if (selectedJudgesForBulk.length > 0 && selectedIds.length > 0) {
          await db.assignJudgesToSubmissions(selectedIds, selectedJudgesForBulk);
-         setSubmissions(await db.getSubmissions(activeEvent?.id));
+         await refreshSubmissions();
          setIsJudgeModalOpen(false);
          setSelectedJudgesForBulk([]);
-         setSelectedIds([]);
       }
+   };
+
+   const handleExportCsv = async () => {
+      const exported = await db.getSubmissionsPaginated({
+         programId: activeEvent?.id,
+         page: 1,
+         pageSize: 1000,
+         search: debouncedSearch,
+      });
+
+      if (exported.items.length === 0) {
+         return;
+      }
+
+      const header = ['id', 'title', 'applicant', 'category', 'status', 'score', 'date', 'votes'];
+      const rows = exported.items.map((item) => [
+         item.id,
+         item.title,
+         item.applicant,
+         item.category,
+         item.status,
+         item.score ?? '',
+         item.date,
+         item.votes ?? 0,
+      ]);
+
+      const csv = [header, ...rows]
+         .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+         .join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${activeEvent?.title || 'submissions'}-export.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
    };
 
    return (
@@ -156,7 +249,10 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                <p className="text-slate-500 font-medium">Manage and review entries stored in Supabase</p>
             </div>
             <div className="flex items-center gap-3">
-               <button className="h-11 px-5 bg-white border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 font-bold text-sm flex items-center gap-2.5 transition-all shadow-sm shadow-slate-200/50 hover:shadow-md">
+               <button
+                  onClick={handleExportCsv}
+                  className="h-11 px-5 bg-white border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 font-bold text-sm flex items-center gap-2.5 transition-all shadow-sm shadow-slate-200/50 hover:shadow-md"
+               >
                   <Download className="w-4 h-4 text-slate-400" /> Export CSV
                </button>
                <button
@@ -176,6 +272,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                   <input
                      type="text"
                      placeholder="Search projects, applicants, or IDs..."
+                     value={searchTerm}
+                     onChange={(e) => setSearchTerm(e.target.value)}
                      className="w-full pl-11 pr-4 h-11 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 focus:bg-white transition-all placeholder:text-slate-400"
                   />
                </div>
@@ -192,8 +290,77 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto">
+            {/* Mobile Card List */}
+            <div className="md:hidden divide-y divide-slate-100">
+               {isLoading && (
+                  <div className="p-4">
+                     <TableSkeleton rows={4} columns={1} />
+                  </div>
+               )}
+               {!isLoading && submissions.map((sub) => (
+                  <div key={sub.id} className="p-4 space-y-3">
+                     <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                           <input
+                              type="checkbox"
+                              className="mt-1 w-4.5 h-4.5 rounded-md border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer accent-indigo-600"
+                              checked={selectedIds.includes(sub.id)}
+                              onChange={() => toggleSelection(sub.id)}
+                           />
+                           <div className="min-w-0">
+                              <button
+                                 onClick={() => handleView(sub)}
+                                 className="block truncate text-left text-sm font-extrabold text-slate-900 hover:text-indigo-600"
+                              >
+                                 {sub.title}
+                              </button>
+                              <p className="mt-0.5 truncate text-xs text-slate-500">{sub.applicant}</p>
+                           </div>
+                        </div>
+                        <StatusBadge status={sub.status} />
+                     </div>
+
+                     <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                           <p className="font-bold uppercase tracking-wide text-slate-400">Category</p>
+                           <p className="mt-1 font-semibold text-slate-700">{sub.category}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                           <p className="font-bold uppercase tracking-wide text-slate-400">Score</p>
+                           <p className="mt-1 font-semibold text-slate-700">{sub.score ? `${sub.score}/100` : '--'}</p>
+                        </div>
+                     </div>
+
+                     <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-slate-400">
+                           {(sub.assignedJudges || []).length} judge{(sub.assignedJudges || []).length === 1 ? '' : 's'} assigned
+                        </p>
+                        <button
+                           onClick={() => handleView(sub)}
+                           className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600"
+                        >
+                           <Eye className="w-3.5 h-3.5" /> View
+                        </button>
+                     </div>
+                  </div>
+               ))}
+               {!isLoading && submissions.length === 0 && (
+                  <div className="p-10 text-center">
+                     <div className="text-lg font-extrabold text-slate-900">
+                        {isSearching ? 'No matching entries' : 'No entries found'}
+                     </div>
+                     <p className="mt-1 text-sm text-slate-500 font-medium">
+                        {isSearching
+                           ? 'Try a different keyword for title, applicant name, or email.'
+                           : 'There are currently no submissions for this program workspace.'}
+                     </p>
+                     <Button onClick={() => setIsModalOpen(true)} size="sm" className="mt-4">Create First Entry</Button>
+                  </div>
+               )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
                <table className="w-full text-left border-collapse min-w-[1000px]">
                   <thead>
                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-[0.1em]">
@@ -218,7 +385,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                      </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                     {submissions.map((sub) => (
+                     {isLoading && (
+                        <tr>
+                           <td colSpan={9}>
+                              <TableSkeleton rows={6} columns={9} />
+                           </td>
+                        </tr>
+                     )}
+                     {!isLoading && submissions.map((sub) => (
                         <tr
                            key={sub.id}
                            className={`hover:bg-slate-50/50 transition-all group ${selectedIds.includes(sub.id) ? 'bg-indigo-50/40' : ''}`}
@@ -338,7 +512,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                            </td>
                         </tr>
                      ))}
-                     {submissions.length === 0 && (
+                     {!isLoading && submissions.length === 0 && (
                         <tr>
                            <td colSpan={9} className="p-20 text-center">
                               <div className="max-w-xs mx-auto space-y-4">
@@ -346,8 +520,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                                     <Search className="w-8 h-8" />
                                  </div>
                                  <div className="space-y-1">
-                                    <div className="text-lg font-extrabold text-slate-900">No entries found</div>
-                                    <p className="text-sm text-slate-500 font-medium">There are currently no submissions for this program workspace.</p>
+                                    <div className="text-lg font-extrabold text-slate-900">
+                                       {isSearching ? 'No matching entries' : 'No entries found'}
+                                    </div>
+                                    <p className="text-sm text-slate-500 font-medium">
+                                       {isSearching
+                                          ? 'Try a different keyword for title, applicant name, or email.'
+                                          : 'There are currently no submissions for this program workspace.'}
+                                    </p>
                                  </div>
                                  <Button onClick={() => setIsModalOpen(true)} size="sm">Create First Entry</Button>
                               </div>
@@ -356,6 +536,41 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent })
                      )}
                   </tbody>
                </table>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Showing {submissions.length === 0 ? 0 : (page - 1) * pageSize + 1}-{Math.min(page * pageSize, total)} of {total}
+               </p>
+               <div className="flex items-center gap-2">
+                  <button
+                     onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                     disabled={page === 1}
+                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                     Prev
+                  </button>
+                  {visiblePageNumbers.map((pageNumber) => (
+                     <button
+                        key={pageNumber}
+                        onClick={() => setPage(pageNumber)}
+                        className={`h-9 w-9 rounded-lg border text-sm font-bold ${
+                           pageNumber === page
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                     >
+                        {pageNumber}
+                     </button>
+                  ))}
+                  <button
+                     onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                     disabled={page >= totalPages}
+                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                     Next
+                  </button>
+               </div>
             </div>
          </div>
 

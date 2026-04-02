@@ -117,6 +117,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   const [previewPageIdx, setPreviewPageIdx] = useState(0);
   const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   // --- Effects ---
   useEffect(() => {
@@ -147,6 +148,13 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     // Always set theme, reset to default if undefined
     setTheme(initialTheme || defaultTheme);
   }, [initialTheme]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    setIsTouchDevice(coarsePointer || hasTouch);
+  }, []);
 
   // Expose current form data via ref
   useImperativeHandle(ref, () => ({
@@ -304,6 +312,26 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
     });
   };
 
+  const moveFieldOnPage = (fieldId: string, direction: 'up' | 'down') => {
+    const pageFields = fields.filter((f) => f.pageId === selectedPageId);
+    const currentIndex = pageFields.findIndex((f) => f.id === fieldId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= pageFields.length) return;
+
+    const sourceField = pageFields[currentIndex];
+    const targetField = pageFields[targetIndex];
+    const sourceGlobalIndex = fields.findIndex((f) => f.id === sourceField.id);
+    const targetGlobalIndex = fields.findIndex((f) => f.id === targetField.id);
+    if (sourceGlobalIndex === -1 || targetGlobalIndex === -1) return;
+
+    const reordered = [...fields];
+    const [moved] = reordered.splice(sourceGlobalIndex, 1);
+    reordered.splice(targetGlobalIndex, 0, moved);
+    setFields(reordered);
+  };
+
   // --- Rendering ---
 
   const renderFieldInput = (field: FormField, isReadOnly = false) => {
@@ -450,9 +478,15 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                       setSelectedFieldId(field.id);
                     }
                   }}
-                  draggable
-                  onDragStart={(e: React.DragEvent) => handleDragStart(e, field.id)}
-                  onDragEnter={(e: React.DragEvent) => handleDragEnter(e, field.id, index)}
+                  draggable={!isTouchDevice}
+                  onDragStart={(e: React.DragEvent) => {
+                    if (isTouchDevice) return;
+                    handleDragStart(e, field.id);
+                  }}
+                  onDragEnter={(e: React.DragEvent) => {
+                    if (isTouchDevice) return;
+                    handleDragEnter(e, field.id, index);
+                  }}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
@@ -498,6 +532,30 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                             <span className="text-[10px] px-0.5">{field.required ? 'REQ' : 'OPT'}</span>
                           </button>
                           <button onClick={(e) => duplicateField(field, e)} className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all" title="Duplicate"><Edit3 className="w-3.5 h-3.5" /></button>
+                          {isTouchDevice && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveFieldOnPage(field.id, 'up');
+                                }}
+                                className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all"
+                                title="Move Up"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveFieldOnPage(field.id, 'down');
+                                }}
+                                className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-md shadow-sm transition-all"
+                                title="Move Down"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                           <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
                       )}
@@ -563,17 +621,19 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       </div>
 
                   {/* Drag Handle Indicator */}
-                  <div 
-                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-move p-1"
-                    draggable
-                    onDragStart={(e: React.DragEvent) => {
-                      e.stopPropagation();
-                      handleDragStart(e, field.id);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <GripVertical className="w-4 h-4" />
-            </div>
+                  {!isTouchDevice && (
+                    <div
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 opacity-0 group-hover:opacity-100 cursor-move p-1"
+                      draggable
+                      onDragStart={(e: React.DragEvent) => {
+                        e.stopPropagation();
+                        handleDragStart(e, field.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </div>
+                  )}
                 </motion.div>
                 );
               })}

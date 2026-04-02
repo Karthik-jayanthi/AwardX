@@ -197,7 +197,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     }
     try {
       const baseUrl = window.location.origin;
-      const formLink = `${baseUrl}?page=form&formId=${formId}`;
+      const formLink = `${baseUrl}/form/${formId}`;
       
       await navigator.clipboard.writeText(formLink);
       setCopiedFormId(formId);
@@ -205,7 +205,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     } catch (error) {
       // Fallback for browsers that don't support clipboard API
       const baseUrl = window.location.origin;
-      const formLink = `${baseUrl}?page=form&formId=${formId}`;
+      const formLink = `${baseUrl}/form/${formId}`;
       const textArea = document.createElement('textarea');
       textArea.value = formLink;
       document.body.appendChild(textArea);

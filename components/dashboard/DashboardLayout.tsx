@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
@@ -22,9 +22,10 @@ interface DashboardUser {
   joinedDate: string;
 }
 import { db as databaseService } from '../../services/database';
-import { auth } from '../../services/supabase';
+import { auth, realtime } from '../../services/supabase';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -174,6 +175,37 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   });
   const [allUsers, setAllUsers] = useState<DashboardUser[]>([]);
   const [permissionsReady, setPermissionsReady] = useState(false);
+  const queryClient = useQueryClient();
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+
+  const notificationsQuery = useQuery({
+    queryKey: ['notifications', activeEvent?.id || 'all'],
+    queryFn: () => databaseService.getNotifications({ programId: activeEvent?.id, limit: 8 }),
+  });
+
+  const notifications = notificationsQuery.data || [];
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  useEffect(() => {
+    const channel = realtime.subscribeToNotifications(() => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+
+    return () => realtime.unsubscribe(channel);
+  }, [queryClient]);
+
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
 
   useEffect(() => {
     // Fetch real user data from Supabase
@@ -286,6 +318,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Demo-only user switching was removed for Supabase-backed auth.
   const handleUserSwitch = (_userId: string) => {
     // no-op
+  };
+
+  const handleNotificationClick = async (notificationId: string) => {
+    await databaseService.markNotificationRead(notificationId);
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    await databaseService.markAllNotificationsRead(activeEvent?.id);
+    queryClient.invalidateQueries({ queryKey: ['notifications'] });
   };
 
   return (
@@ -461,13 +503,78 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 lg:w-64 transition-all hover:bg-white hover:border-slate-300"
                 />
               </div>
-
-              <button className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white ring-1 ring-white"></span>
+              <button
+                onClick={() => setShowMobileSearch((prev) => !prev)}
+                className="sm:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+                aria-label="Toggle mobile search"
+              >
+                <Search className="w-5 h-5" />
               </button>
+
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  onClick={() => setIsNotificationsOpen((prev) => !prev)}
+                  className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {isNotificationsOpen && (
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+                    <div className="mb-2 flex items-center justify-between px-1">
+                      <h4 className="text-sm font-bold text-slate-900">Notifications</h4>
+                      <button
+                        onClick={handleMarkAllNotificationsRead}
+                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+                    <div className="max-h-80 space-y-2 overflow-y-auto">
+                      {notifications.length === 0 && (
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-500">
+                          No notifications yet.
+                        </div>
+                      )}
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification.id)}
+                          className={`w-full rounded-xl border px-3 py-2 text-left transition-colors ${
+                            notification.isRead
+                              ? 'border-slate-100 bg-slate-50 text-slate-600'
+                              : 'border-indigo-200 bg-indigo-50/60 text-slate-800'
+                          }`}
+                        >
+                          <div className="text-xs font-bold uppercase tracking-wider text-slate-400">{notification.type}</div>
+                          <div className="mt-1 text-sm font-semibold">{notification.title}</div>
+                          <div className="mt-1 text-xs text-slate-500">{notification.body}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </header>
+        )}
+
+        {!hideHeader && showMobileSearch && (
+          <div className="sm:hidden border-b border-slate-200/60 bg-white px-4 py-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search workspace..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-4 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+          </div>
         )}
 
         {/* Scrollable Content */}

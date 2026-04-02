@@ -56,6 +56,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [inviteEmails, setInviteEmails] = useState('');
     const [inviteRoleId, setInviteRoleId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
+    const [memberSearch, setMemberSearch] = useState('');
+    const [memberPage, setMemberPage] = useState(1);
 
     // Modals
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -188,6 +190,23 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         }
     };
 
+    const membersPerPage = 10;
+    const filteredMembers = members.filter((member) => {
+        const q = memberSearch.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            member.name.toLowerCase().includes(q) ||
+            member.email.toLowerCase().includes(q) ||
+            member.role.toLowerCase().includes(q)
+        );
+    });
+    const memberTotalPages = Math.max(1, Math.ceil(filteredMembers.length / membersPerPage));
+    const paginatedMembers = filteredMembers.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
+
+    useEffect(() => {
+        setMemberPage(1);
+    }, [memberSearch]);
+
     return (
         <div className="space-y-8">
             <div className="flex justify-between items-center">
@@ -229,7 +248,13 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                     <div className="p-4 border-b border-slate-200 flex gap-4 bg-slate-50/50">
                         <div className="relative flex-1 max-w-md">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input type="text" placeholder="Search team members..." className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+                            <input
+                                type="text"
+                                value={memberSearch}
+                                onChange={(e) => setMemberSearch(e.target.value)}
+                                placeholder="Search team members..."
+                                className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
                         </div>
                         <button className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white hover:bg-slate-50 text-slate-600">
                             <Filter className="w-4 h-4" /> Role
@@ -247,7 +272,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {members.map((member) => (
+                            {paginatedMembers.map((member) => (
                                 <tr key={member.memberId} className={`hover:bg-slate-50 transition-colors ${currentUserId && member.userId === currentUserId ? 'bg-indigo-50/30' : ''}`}>
                                     <td className="p-4 pl-6">
                                         <UserHoverCard user={member}>
@@ -295,8 +320,35 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                     </td>
                                 </tr>
                             ))}
+                            {paginatedMembers.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} className="p-10 text-center">
+                                        <p className="text-sm text-slate-500">No team members match your search.</p>
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4">
+                        <p className="text-xs text-slate-500">Page {memberPage} of {memberTotalPages}</p>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setMemberPage((prev) => Math.max(1, prev - 1))}
+                                disabled={memberPage === 1}
+                                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Prev
+                            </button>
+                            <button
+                                onClick={() => setMemberPage((prev) => Math.min(memberTotalPages, prev + 1))}
+                                disabled={memberPage >= memberTotalPages}
+                                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 

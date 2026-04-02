@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_STRIPE_PUBLISHABLE_KEY?: string;
   readonly VITE_PAYPAL_CLIENT_ID?: string;
   readonly VITE_RAZORPAY_KEY_ID?: string;
+  readonly VITE_SENTRY_DSN?: string;
   readonly VITE_STORAGE_BUCKET_AVATARS?: string;
   readonly VITE_STORAGE_BUCKET_SUBMISSIONS?: string;
   readonly VITE_STORAGE_BUCKET_PROGRAM_ASSETS?: string;

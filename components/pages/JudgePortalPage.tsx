@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Gavel, Clock, AlertTriangle, CheckCircle2, Star, FileText, Calendar, Award, ChevronDown, ChevronUp, LinkIcon } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 interface JudgeInfo {
   id: string;
@@ -42,11 +43,9 @@ interface CriterionInfo {
   maxScore: number;
 }
 
-interface JudgePortalPageProps {
-  onNavigate?: (page: string) => void;
-}
-
-export const JudgePortalPage: React.FC<JudgePortalPageProps> = ({ onNavigate }) => {
+export const JudgePortalPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { token: tokenParam } = useParams<{ token?: string }>();
   const [status, setStatus] = useState<'loading' | 'success' | 'expired' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [judge, setJudge] = useState<JudgeInfo | null>(null);
@@ -60,7 +59,7 @@ export const JudgePortalPage: React.FC<JudgePortalPageProps> = ({ onNavigate }) 
     const verifyToken = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const token = params.get('token');
+        const token = tokenParam || params.get('token');
 
         if (!token) {
           setStatus('error');
@@ -174,7 +173,7 @@ export const JudgePortalPage: React.FC<JudgePortalPageProps> = ({ onNavigate }) 
           <h2 className="text-2xl font-bold text-slate-900 mb-3">Invalid Invite Link</h2>
           <p className="text-slate-600 mb-6">{errorMessage}</p>
           <button
-            onClick={() => onNavigate?.('home')}
+            onClick={() => navigate('/')}
             className="px-6 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors font-medium"
           >
             Go to Homepage

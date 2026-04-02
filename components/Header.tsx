@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Sparkles, LayoutDashboard, LogOut, User } from 'lucide-react';
+import { Menu, X, Sparkles, LayoutDashboard, LogOut } from 'lucide-react';
 import { Button } from './Button';
 import { motion, useScroll } from 'framer-motion';
-import { auth } from '../services/supabase';
 import { db } from '../services/database';
 import { Contact } from '../services/models';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
   onNavigate: (page: string) => void;
@@ -15,9 +15,9 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogout }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<Contact | null>(null);
   const { scrollY } = useScroll();
+  const { isAuthenticated, user, signOut } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -27,19 +27,14 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Check authentication status and fetch user data (same logic as dashboard)
   useEffect(() => {
     const fetchUserData = async () => {
-      try {
-        const { session } = await auth.getSession();
-        setIsAuthenticated(!!session);
-        
-        if (!session) {
-          setCurrentUser(null);
-          return;
-        }
+      if (!isAuthenticated) {
+        setCurrentUser(null);
+        return;
+      }
 
-        // Fetch real user data from Supabase (same logic as DashboardLayout)
+      try {
         try {
           await db.initialize().catch(() => {
             // If initialize fails, continue with auth fallback
@@ -48,8 +43,6 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
           if (realUser) {
             setCurrentUser(realUser);
           } else {
-            // Fallback: Get user from auth
-            const { user } = await auth.getUser();
             if (user) {
               setCurrentUser({
                 id: user.id,
@@ -67,25 +60,19 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
           }
         } catch (error) {
           console.error('Failed to fetch user data:', error);
-          // Fallback: Get user from auth directly
-          try {
-            const { user } = await auth.getUser();
-            if (user) {
-              setCurrentUser({
-                id: user.id,
-                name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-                email: user.email || '',
-                role: 'Admin',
-                status: 'Active',
-                lastActive: 'Now',
-                avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
-                source: 'Internal',
-                surveyAnswer: '',
-                joinedDate: new Date().toISOString().split('T')[0],
-              });
-            }
-          } catch (authError) {
-            console.error('Failed to get user from auth:', authError);
+          if (user) {
+            setCurrentUser({
+              id: user.id,
+              name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+              role: 'Admin',
+              status: 'Active',
+              lastActive: 'Now',
+              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
+              source: 'Internal',
+              surveyAnswer: '',
+              joinedDate: new Date().toISOString().split('T')[0],
+            });
           }
         }
       } catch (error) {
@@ -94,29 +81,12 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
     };
 
     fetchUserData();
-
-    // Listen for auth state changes
-    const { data } = auth.onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session);
-      if (session) {
-        fetchUserData(); // Reload user data on sign in
-      } else {
-        setCurrentUser(null);
-      }
-    });
-
-    return () => {
-      if (data?.subscription) {
-        data.subscription.unsubscribe();
-      }
-    };
-  }, []);
+  }, [isAuthenticated, user]);
 
   const handleLogout = async () => {
     try {
-      await auth.signOut();
+      await signOut();
       setCurrentUser(null);
-      setIsAuthenticated(false);
       if (onLogout) {
         onLogout();
       } else {

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff, Gavel, Star, TrendingUp } from 'lucide-react';
 import { auth } from '../../services/supabase';
+import { useNavigate } from 'react-router-dom';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -24,11 +25,8 @@ const LinkedInIcon = () => (
   </svg>
 );
 
-interface LoginPageProps {
-  onNavigate: (page: string) => void;
-}
-
-export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
+export const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -71,7 +69,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
           window.location.href = returnUrl;
         } else {
           // Successfully logged in, navigate to dashboard
-          onNavigate('dashboard');
+          navigate('/dashboard');
         }
       }
     } catch (err: any) {
@@ -173,7 +171,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
         {/* Navigation */}
         <div className="flex justify-between items-center mb-12">
            <button 
-            onClick={() => onNavigate('home')} 
+            onClick={() => navigate('/')} 
             className="flex items-center text-slate-500 hover:text-slate-900 transition-colors font-medium text-sm group"
           >
             <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" /> Back
@@ -314,9 +312,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
              </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-slate-500">
-             Don't have an account? <button onClick={() => onNavigate('signup')} className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">Sign up</button>
-          </p>
+           <p className="mt-8 text-center text-sm text-slate-500">
+             Don't have an account? <button onClick={() => navigate('/signup')} className="font-bold text-indigo-600 hover:text-indigo-700 transition-colors">Sign up</button>
+           </p>
         </motion.div>
         
         <div className="mt-12 text-xs text-slate-400 text-center">

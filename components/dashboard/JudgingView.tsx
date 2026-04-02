@@ -8,7 +8,7 @@ import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
 import { sendJudgeInviteEmail } from '../../services/email';
-import { supabase } from '../../services/supabase';
+import { supabase, realtime } from '../../services/supabase';
 
 interface JudgingViewProps {
    activeEvent?: Program | null;
@@ -30,21 +30,31 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [isRemovingAll, setIsRemovingAll] = useState(false);
   const [criteria, setCriteria] = useState<{id: any; name: string; weight: number; description: string}[]>([]);
   const [shortlistOnly, setShortlistOnly] = useState(false);
+     const [judgesPage, setJudgesPage] = useState(1);
+     const judgesPerPage = 9;
 
-   useEffect(() => {
-      const load = async () => {
+      const refreshAll = async () => {
          if (!activeEvent) return;
+
          const [judgeData, submissionData, rounds] = await Promise.all([
             db.getJudges(activeEvent.id),
             db.getSubmissions(activeEvent.id),
             scheduleRoundsService.getRounds(activeEvent.id),
          ]);
+
          const shortlistActive = rounds.some(round =>
             round.shortlistConfig?.enabled && (round.status === 'active' || round.status === 'completed')
          );
+
          setShortlistOnly(shortlistActive);
          setJudges(judgeData);
          setSubmissions(shortlistActive ? submissionData.filter(s => s.status === 'Shortlisted') : submissionData);
+      };
+
+   useEffect(() => {
+      const load = async () => {
+         if (!activeEvent) return;
+            await refreshAll();
 
          // Load criteria from DB
          try {
@@ -84,9 +94,18 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       load();
    }, [activeEvent]);
 
+   useEffect(() => {
+      if (!activeEvent?.id) return;
+
+      const channel = realtime.subscribeToJudgingProgress(activeEvent.id, () => {
+         refreshAll();
+      });
+
+      return () => realtime.unsubscribe(channel);
+   }, [activeEvent?.id]);
+
    const refreshJudges = async () => {
-      const judgeData = await db.getJudges(activeEvent?.id);
-      setJudges(judgeData);
+      await refreshAll();
    };
 
    const handleRemoveJudge = async (judgeId: string) => {
@@ -149,6 +168,14 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
 
    const totalProgress = Math.round(judges.reduce((acc, curr) => acc + curr.progress, 0) / (judges.length || 1));
    const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
+   const judgeTotalPages = Math.max(1, Math.ceil(judges.length / judgesPerPage));
+   const paginatedJudges = judges.slice((judgesPage - 1) * judgesPerPage, judgesPage * judgesPerPage);
+
+   useEffect(() => {
+      if (judgesPage > judgeTotalPages) {
+         setJudgesPage(judgeTotalPages);
+      }
+   }, [judgeTotalPages, judgesPage]);
 
    if (!activeEvent) {
       return (
@@ -270,7 +297,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                       </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {judges.map((judge) => (
+               {paginatedJudges.map((judge) => (
                   <div key={judge.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow group">
                      <div className="flex justify-between items-start mb-6">
                         <div className="flex items-center gap-4">
@@ -328,7 +355,31 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                      </div>
                   </div>
                ))}
+               {paginatedJudges.length === 0 && (
+                  <div className="col-span-full rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+                     No judges yet. Invite your first judge to begin panel reviews.
+                  </div>
+               )}
             </div>
+            {judges.length > judgesPerPage && (
+               <div className="flex items-center justify-end gap-2">
+                  <button
+                     onClick={() => setJudgesPage((prev) => Math.max(1, prev - 1))}
+                     disabled={judgesPage === 1}
+                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                     Prev
+                  </button>
+                  <span className="text-xs text-slate-500">Page {judgesPage} of {judgeTotalPages}</span>
+                  <button
+                     onClick={() => setJudgesPage((prev) => Math.min(judgeTotalPages, prev + 1))}
+                     disabled={judgesPage >= judgeTotalPages}
+                     className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                     Next
+                  </button>
+               </div>
+            )}
          </div>
       )}
 
@@ -568,7 +619,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                         const siteUrl = window.location.origin;
                         const inviteToken = judgeData?.invite_token;
                         const magicLinkUrl = inviteToken
-                           ? `${siteUrl}/?page=judge-portal&token=${inviteToken}`
+                           ? `${siteUrl}/judge/${inviteToken}`
                            : siteUrl;
                         await sendJudgeInviteEmail({
                            email: judgeForm.email.trim(),

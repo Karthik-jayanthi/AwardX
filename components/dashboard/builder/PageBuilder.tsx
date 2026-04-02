@@ -186,7 +186,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
         const baseUrl = window.location.origin;
         const shareUrl = programSlug 
             ? `${baseUrl}/program/${encodeURIComponent(programSlug)}`
-            : `${baseUrl}/?page=program&id=${programId}`;
+            : `${baseUrl}/program?id=${programId}`;
 
         try {
             await navigator.clipboard.writeText(shareUrl);
@@ -244,7 +244,7 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
                     <Button variant="outline" className="mr-2" onClick={() => {
                         const previewUrl = programSlug 
                             ? `/program/${encodeURIComponent(programSlug)}`
-                            : `/?page=program&id=${programId}`;
+                            : `/program?id=${programId}`;
                         window.open(previewUrl, '_blank');
                     }}>
                         <Eye className="w-4 h-4 mr-2" /> Live Preview

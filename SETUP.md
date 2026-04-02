@@ -11,12 +11,25 @@
 1. Create a `.env` file in the root directory with the following:
 
 ```env
-VITE_SUPABASE_URL=https://yavozrvkpbywjdabygoo.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlhdm96cnZrcGJ5d2pkYWJ5Z29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNjQ1MzYsImV4cCI6MjA3OTg0MDUzNn0.0KmaGooKL467-yeiy17rregL2Zs85ATPPfYA4hgFgwQ
+VITE_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
 VITE_SITE_URL=http://localhost:3000
+VITE_SENTRY_DSN=https://xxx.ingest.sentry.io/xxx
+
+# Server-only (Vercel Functions / backend only)
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+RESEND_API_KEY=YOUR_RESEND_API_KEY
+SITE_URL=http://localhost:3000
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+RAZORPAY_KEY_ID=rzp_test_xxx
+RAZORPAY_KEY_SECRET=rzp_test_xxx
+UPTIME_BASE_URL=https://your-production-domain.com
 ```
 
 2. If deploying to production, update `VITE_SITE_URL` to your production URL.
+3. Rotate any previously exposed Supabase keys immediately and replace them with newly issued keys.
 
 ## Step 2: Database Setup
 
@@ -106,6 +119,12 @@ RLS is enabled on all sensitive tables. Basic policies are included, but you sho
 2. Set up email templates in Supabase for password resets and invitations
 3. Configure storage buckets for file uploads (avatars, submissions)
 4. Set up webhooks if needed for payment processing
+5. If using Stripe checkout, point your Stripe webhook to `/api/webhooks/stripe`
+6. For Razorpay, client-side verification posts to `/api/payments/razorpay-verify`
+7. Stripe Connect onboarding starts at `/api/payments/stripe-connect-start?programId=<program-id>`
+8. Health check endpoint for uptime monitoring is `/api/health`
+9. Configure GitHub secret `UPTIME_BASE_URL` to enable scheduled checks in `.github/workflows/uptime-monitor.yml`
+10. Set `VITE_SENTRY_DSN` in production environment variables to enable frontend error monitoring
 5. Configure additional OAuth providers (GitHub, LinkedIn) if needed
 
 ## Troubleshooting

@@ -2,13 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { auth, refreshUserCache } from '../services/supabase';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-interface AuthCallbackProps {
-  onSuccess: () => void;
-  onError: (error: string) => void;
-}
-
-export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onError }) => {
+export const AuthCallback: React.FC = () => {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -31,7 +28,7 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onError }
           
           // Wait a moment to show success state, then redirect
           setTimeout(() => {
-            onSuccess();
+            navigate('/dashboard', { replace: true });
           }, 1000);
         } else {
           // No session found, check URL for error
@@ -47,12 +44,11 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onError }
       } catch (error: any) {
         setStatus('error');
         setErrorMessage(error.message || 'Authentication failed');
-        onError(error.message || 'Authentication failed');
       }
     };
 
     handleAuthCallback();
-  }, [onSuccess, onError]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -84,7 +80,7 @@ export const AuthCallback: React.FC<AuthCallbackProps> = ({ onSuccess, onError }
               <h2 className="text-2xl font-bold text-slate-900 mb-2">Authentication Error</h2>
               <p className="text-slate-500 mb-4">{errorMessage}</p>
               <button
-                onClick={() => window.location.href = '/'}
+                onClick={() => navigate('/', { replace: true })}
                 className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
               >
                 Return to Home

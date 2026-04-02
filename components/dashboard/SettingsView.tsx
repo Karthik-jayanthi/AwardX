@@ -1,28 +1,50 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button } from '../Button';
-import { User, CreditCard, Bell, Shield, Globe } from 'lucide-react';
+import { User, CreditCard, Bell, Shield, Globe, Wallet } from 'lucide-react';
 import { db } from '../../services/database';
 import { auth } from '../../services/supabase';
+import { Program } from '../../services/models';
 
-export const SettingsView: React.FC = () => {
+interface SettingsViewProps {
+  activeEvent?: Program | null;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ activeEvent }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState<any>(null);
   const [org, setOrg] = useState<any>(null);
   const [userSettings, setUserSettings] = useState<any>(null);
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [selectedProgramId, setSelectedProgramId] = useState<string>('');
+  const [billingProvider, setBillingProvider] = useState<'Stripe' | 'Razorpay'>('Stripe');
+  const [billingEnabled, setBillingEnabled] = useState(false);
+  const [billingCurrency, setBillingCurrency] = useState('USD');
+  const [billingFee, setBillingFee] = useState(0);
+  const [billingPublicKey, setBillingPublicKey] = useState('');
+  const [connectMessage, setConnectMessage] = useState<string | null>(null);
+  const [stripeConnected, setStripeConnected] = useState(false);
+  const [stripeStatusDetails, setStripeStatusDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'billing') {
+      setActiveTab('billing');
+    }
+
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [{ data: prof, error: profErr }, { data: orgData, error: orgErr }, { data: us, error: usErr }] = await Promise.all([
+        const [{ data: prof, error: profErr }, { data: orgData, error: orgErr }, { data: us, error: usErr }, allPrograms] = await Promise.all([
           db.getProfile(),
           db.getOrganization(),
           db.getUserSettings(),
+          db.getPrograms(),
         ]);
         if (profErr) throw profErr;
         if (orgErr) throw orgErr;
@@ -32,6 +54,11 @@ export const SettingsView: React.FC = () => {
         setProfile(prof);
         setOrg(orgData);
         setUserSettings(us || { notifications: {}, preferences: {} });
+        setPrograms(allPrograms || []);
+
+        const queryProgramId = params.get('programId') || '';
+        const defaultProgramId = queryProgramId || activeEvent?.id || allPrograms?.[0]?.id || '';
+        setSelectedProgramId(defaultProgramId);
       } catch (e: any) {
         setError(e?.message || 'Failed to load settings');
       } finally {
@@ -39,7 +66,78 @@ export const SettingsView: React.FC = () => {
       }
     };
     load();
+  }, [activeEvent?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeState = params.get('stripe');
+    if (stripeState === 'connected') {
+      setConnectMessage('Stripe account onboarding completed. Save billing settings to finalize.');
+      setStripeConnected(true);
+    }
   }, []);
+
+  useEffect(() => {
+    const selectedProgram = programs.find((p) => p.id === selectedProgramId);
+    if (!selectedProgram) {
+      return;
+    }
+
+    const paymentConfig = selectedProgram.paymentConfig;
+    if (!paymentConfig) {
+      setBillingProvider('Stripe');
+      setBillingEnabled(false);
+      setBillingCurrency('USD');
+      setBillingFee(0);
+      setBillingPublicKey('');
+      return;
+    }
+
+    setBillingProvider(paymentConfig.provider === 'Razorpay' ? 'Razorpay' : 'Stripe');
+    setBillingEnabled(!!paymentConfig.enabled);
+    setBillingCurrency(paymentConfig.currency || (paymentConfig.provider === 'Razorpay' ? 'INR' : 'USD'));
+    setBillingFee(Number(paymentConfig.fee || 0));
+    setBillingPublicKey(paymentConfig.publicKey || '');
+    setStripeConnected(!!paymentConfig.connected);
+  }, [programs, selectedProgramId]);
+
+  const refreshStripeStatus = async () => {
+    if (!selectedProgramId) {
+      setError('Please select a program first.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/payments/stripe-connect-status?programId=${selectedProgramId}`);
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Unable to refresh Stripe account status');
+      }
+
+      setStripeConnected(!!payload.connected);
+      setStripeStatusDetails(payload);
+      setConnectMessage(payload.connected
+        ? 'Stripe account is fully connected and ready for live processing.'
+        : 'Stripe account status updated. Complete any pending requirements to finish onboarding.');
+
+      const refreshed = await db.getPrograms();
+      setPrograms(refreshed || []);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to refresh Stripe account status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeState = params.get('stripe');
+    if ((stripeState === 'connected' || stripeState === 'refresh') && activeTab === 'billing' && selectedProgramId) {
+      refreshStripeStatus();
+    }
+  }, [activeTab, selectedProgramId]);
 
   const email = useMemo(() => profile?.email || '', [profile]);
   const avatarUrl = useMemo(
@@ -96,6 +194,50 @@ export const SettingsView: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveBillingConfig = async () => {
+    const selectedProgram = programs.find((p) => p.id === selectedProgramId);
+    if (!selectedProgram) {
+      setError('Select a program before saving billing settings.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setConnectMessage(null);
+
+    try {
+      await db.updateProgram({
+        ...selectedProgram,
+        paymentConfig: {
+          enabled: billingEnabled,
+          provider: billingProvider,
+          currency: billingCurrency,
+          fee: Number(billingFee) || 0,
+          connected: billingProvider === 'Stripe'
+            ? (stripeConnected || selectedProgram.paymentConfig?.connected || false)
+            : true,
+          publicKey: billingPublicKey || undefined,
+        },
+      });
+
+      const refreshed = await db.getPrograms();
+      setPrograms(refreshed || []);
+      setConnectMessage('Billing settings saved.');
+    } catch (e: any) {
+      setError(e?.message || 'Failed to save billing settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const connectStripeAccount = () => {
+    if (!selectedProgramId) {
+      setError('Please select a program first.');
+      return;
+    }
+    window.location.href = `/api/payments/stripe-connect-start?programId=${selectedProgramId}`;
   };
 
   const tabs = [
@@ -240,6 +382,150 @@ export const SettingsView: React.FC = () => {
                      <div className="pt-2">
                        <Button onClick={saveOrganization} disabled={loading || saving}>
                          {saving ? 'Saving…' : 'Save Organization'}
+                       </Button>
+                     </div>
+                   </div>
+
+                   <h3 className="font-bold text-slate-900 mt-8 mb-4">Payment Providers</h3>
+                   <div className="border border-slate-200 rounded-xl p-4 space-y-4 max-w-2xl">
+                     <div>
+                       <label className="block text-sm font-semibold text-slate-700 mb-1">Program</label>
+                       <select
+                         value={selectedProgramId}
+                         onChange={(e) => setSelectedProgramId(e.target.value)}
+                         className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                         disabled={loading || programs.length === 0}
+                       >
+                         {programs.map((program) => (
+                           <option key={program.id} value={program.id}>{program.title}</option>
+                         ))}
+                       </select>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-sm font-semibold text-slate-700 mb-1">Provider</label>
+                         <select
+                           value={billingProvider}
+                           onChange={(e) => {
+                             const provider = e.target.value === 'Razorpay' ? 'Razorpay' : 'Stripe';
+                             setBillingProvider(provider);
+                             if (provider === 'Razorpay' && billingCurrency === 'USD') {
+                               setBillingCurrency('INR');
+                             }
+                           }}
+                           className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                           disabled={loading}
+                         >
+                           <option value="Stripe">Stripe</option>
+                           <option value="Razorpay">Razorpay</option>
+                         </select>
+                       </div>
+
+                       <div>
+                         <label className="block text-sm font-semibold text-slate-700 mb-1">Currency</label>
+                         <select
+                           value={billingCurrency}
+                           onChange={(e) => setBillingCurrency(e.target.value)}
+                           className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                           disabled={loading}
+                         >
+                           {billingProvider === 'Razorpay' ? (
+                             <>
+                               <option value="INR">INR</option>
+                               <option value="USD">USD</option>
+                             </>
+                           ) : (
+                             <>
+                               <option value="USD">USD</option>
+                               <option value="EUR">EUR</option>
+                               <option value="GBP">GBP</option>
+                               <option value="CAD">CAD</option>
+                             </>
+                           )}
+                         </select>
+                       </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div>
+                         <label className="block text-sm font-semibold text-slate-700 mb-1">Submission Fee</label>
+                         <div className="relative">
+                           <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                           <input
+                             type="number"
+                             min="0"
+                             step="0.01"
+                             value={billingFee}
+                             onChange={(e) => setBillingFee(Number(e.target.value) || 0)}
+                             className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg"
+                             disabled={loading}
+                           />
+                         </div>
+                       </div>
+
+                       <div>
+                         <label className="block text-sm font-semibold text-slate-700 mb-1">Enable payments</label>
+                         <button
+                           type="button"
+                           onClick={() => setBillingEnabled((prev) => !prev)}
+                           className={`relative mt-1 h-8 w-14 rounded-full transition-colors ${billingEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                           aria-label="Toggle payment collection"
+                         >
+                           <span className={`absolute top-1 block h-6 w-6 rounded-full bg-white transition-transform ${billingEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                         </button>
+                       </div>
+                     </div>
+
+                     <div>
+                       <label className="block text-sm font-semibold text-slate-700 mb-1">
+                         {billingProvider === 'Razorpay' ? 'Razorpay Key ID' : 'Provider Public Key'}
+                       </label>
+                       <input
+                         type="text"
+                         value={billingPublicKey}
+                         onChange={(e) => setBillingPublicKey(e.target.value)}
+                         className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                         placeholder={billingProvider === 'Razorpay' ? 'rzp_live_xxx' : 'pk_live_xxx'}
+                         disabled={loading}
+                       />
+                     </div>
+
+                     {billingProvider === 'Stripe' && (
+                       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                         <p className="text-sm text-slate-600 mb-3">Connect Stripe Express account for payouts and live processing.</p>
+                         <div className="flex flex-wrap items-center gap-2">
+                           <Button variant="outline" onClick={connectStripeAccount} disabled={!selectedProgramId || saving}>
+                             Connect Stripe Account
+                           </Button>
+                           <Button variant="outline" onClick={refreshStripeStatus} disabled={!selectedProgramId || saving}>
+                             Refresh Stripe Status
+                           </Button>
+                         </div>
+                         {stripeStatusDetails && (
+                           <div className="mt-3 text-xs text-slate-600 space-y-1">
+                             <p>Charges Enabled: {stripeStatusDetails.chargesEnabled ? 'Yes' : 'No'}</p>
+                             <p>Payouts Enabled: {stripeStatusDetails.payoutsEnabled ? 'Yes' : 'No'}</p>
+                             {stripeStatusDetails.disabledReason && (
+                               <p>Disabled Reason: {stripeStatusDetails.disabledReason}</p>
+                             )}
+                             {(stripeStatusDetails.requirementsDue || []).length > 0 && (
+                               <p>Pending Requirements: {(stripeStatusDetails.requirementsDue || []).join(', ')}</p>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                     )}
+
+                     {connectMessage && (
+                       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                         {connectMessage}
+                       </div>
+                     )}
+
+                     <div className="pt-2">
+                       <Button onClick={saveBillingConfig} disabled={loading || saving || !selectedProgramId}>
+                         {saving ? 'Saving…' : 'Save Billing Settings'}
                        </Button>
                      </div>
                    </div>

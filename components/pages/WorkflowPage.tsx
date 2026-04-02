@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { CategoriesWorkflow } from '../dashboard/CategoriesWorkflow';
 import { db } from '../../services/database';
 import { Category, Program } from '../../services/models';
+import { useParams } from 'react-router-dom';
 
 export const WorkflowPage: React.FC = () => {
+    const { programId: programIdParam } = useParams<{ programId?: string }>();
     const [categories, setCategories] = useState<Category[]>([]);
     const [program, setProgram] = useState<Program | null>(null);
     const [programId, setProgramId] = useState<string | null>(null);
@@ -11,9 +13,9 @@ export const WorkflowPage: React.FC = () => {
 
     useEffect(() => {
         const run = async () => {
-            // Get program ID from URL parameters
+            // Get program ID from route parameter or query string
             const urlParams = new URLSearchParams(window.location.search);
-            const id = urlParams.get('programId') || urlParams.get('id');
+            const id = programIdParam || urlParams.get('programId') || urlParams.get('id');
             setProgramId(id);
 
             if (!id) {
@@ -34,7 +36,7 @@ export const WorkflowPage: React.FC = () => {
             }
         };
         run();
-    }, []);
+    }, [programIdParam]);
 
     const handleAddSub = (parentId: string) => {
         // In standalone mode, we can't add categories, but we'll handle it gracefully

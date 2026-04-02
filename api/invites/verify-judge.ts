@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
+import { verifyJudgeSchema } from '../_utils/validation';
 
 export default async function handler(req: any, res: any) {
   // Allow GET (link click) and POST
@@ -7,21 +9,25 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const token = req.method === 'GET' ? req.query?.token : req.body?.token;
-  if (!token) {
-    res.status(400).json({ error: 'token is required' });
+  const ip = getClientIp(req);
+  const rateLimit = enforceRateLimit(`verify-judge:${ip}`, 10, 15 * 60 * 1000);
+  if (!rateLimit.ok) {
+    res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+    res.status(429).json({ error: 'Rate limit exceeded. Try again later.' });
     return;
   }
 
-  // Validate UUID format
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(token)) {
-    res.status(400).json({ error: 'Invalid token format' });
+  const tokenCandidate = req.method === 'GET' ? req.query?.token : req.body?.token;
+  const parsed = verifyJudgeSchema.safeParse({ token: tokenCandidate });
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid token format', details: parsed.error.flatten() });
     return;
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+  const { token } = parsed.data;
+
+  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
     res.status(500).json({ error: 'Supabase not configured' });

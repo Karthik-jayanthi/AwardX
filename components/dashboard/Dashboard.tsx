@@ -1,12 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
 import { DashboardOverview } from './DashboardOverview';
 import { FormBuilderView } from './FormBuilderView';
 import { SubmissionTable } from './SubmissionTable';
 import { JudgingView } from './JudgingView';
-import { AnalyticsView } from './AnalyticsView';
 import { SettingsView } from './SettingsView';
 import { ReachView } from './ReachView';
 import { TeamsView } from './TeamsView';
@@ -16,12 +15,23 @@ import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView'; // Import new view
 import { ProgramDetailsView } from './ProgramDetailsView';
 import { PageBuilder } from './builder/PageBuilder';
-import { ScheduleRoundsView } from './scheduleRounds/ScheduleRoundsView';
 import { CustomGridView } from './CustomGridView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
 import { auth } from '../../services/supabase';
+import { ErrorBoundary } from '../ErrorBoundary';
+
+const ScheduleRoundsView = lazy(() =>
+  import('./scheduleRounds/ScheduleRoundsView').then((m) => ({ default: m.ScheduleRoundsView })),
+);
+const AnalyticsView = lazy(() => import('./AnalyticsView').then((m) => ({ default: m.AnalyticsView })));
+
+const ViewLoader: React.FC = () => (
+  <div className="flex items-center justify-center h-64">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+  </div>
+);
 
 interface DashboardProps {
   onLogout: () => void;
@@ -34,31 +44,55 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   // Restore workspace state on init
   useEffect(() => {
+    let cancelled = false;
+
     const initialize = async () => {
       try {
-        await databaseService.initialize();
+        const initializeDashboard = async () => {
+          await databaseService.initialize();
 
-        // Restore persisted workspace state
-        const { user } = await auth.getUser();
-        if (user) {
-          const { data: ws } = await workspaceState.get(user.id);
-          if (ws) {
-            if (ws.current_view) setCurrentView(ws.current_view);
-            if (ws.active_program_id) {
-              // Load the program
-              const programs = await databaseService.getPrograms();
-              const restored = programs.find(p => p.id === ws.active_program_id);
-              if (restored) setActiveEvent(restored);
+          const params = new URLSearchParams(window.location.search);
+          const viewParam = params.get('view');
+          const tabParam = params.get('tab');
+          if (!cancelled && (viewParam === 'settings' || tabParam === 'billing')) {
+            setCurrentView('settings');
+          }
+
+          // Restore persisted workspace state
+          const { user } = await auth.getUser();
+          if (user) {
+            const { data: ws } = await workspaceState.get(user.id);
+            if (ws) {
+              if (!cancelled && ws.current_view) setCurrentView(ws.current_view);
+              if (ws.active_program_id) {
+                // Load the program
+                const programs = await databaseService.getPrograms();
+                const restored = programs.find(p => p.id === ws.active_program_id);
+                if (!cancelled && restored) setActiveEvent(restored);
+              }
             }
           }
-        }
+        };
+
+        await Promise.race([
+          initializeDashboard(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Dashboard initialization timed out')), 10000),
+          ),
+        ]);
       } catch (error) {
         console.error('Failed to initialize dashboard:', error);
       } finally {
-        setIsInitializing(false);
+        if (!cancelled) {
+          setIsInitializing(false);
+        }
       }
     };
     initialize();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persist workspace state on change
@@ -93,7 +127,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'schedule':
         return <ScheduleView activeEvent={activeEvent} />;
       case 'schedule-rounds':
-        return <ScheduleRoundsView activeEvent={activeEvent} />;
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <ScheduleRoundsView activeEvent={activeEvent} />
+          </Suspense>
+        );
       case 'submission-setup':
         return <SubmissionProcessView activeEvent={activeEvent} />;
       case 'awards':
@@ -108,13 +146,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'reach':
         return <ReachView />;
       case 'analytics':
-        return <AnalyticsView activeEvent={activeEvent} />;
+        return (
+          <Suspense fallback={<ViewLoader />}>
+            <AnalyticsView activeEvent={activeEvent} />
+          </Suspense>
+        );
       case 'teams':
         return <TeamsView activeEvent={activeEvent} />;
       case 'logs':
         return <AuditLogsView />;
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView activeEvent={activeEvent} />;
       case 'program-details':
         return <ProgramDetailsView activeEvent={activeEvent} />;
       default:
@@ -166,7 +208,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         transition={{ duration: 0.3 }}
         className="h-full"
       >
-        {renderView()}
+        <ErrorBoundary resetKey={`${currentView}:${activeEvent?.id || 'none'}`}>
+          {renderView()}
+        </ErrorBoundary>
       </motion.div>
     </DashboardLayout>
   );

@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from '../Header';
 import { Footer } from '../Footer';
 import { Button } from '../Button';
 import { programs, auth, programPages } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Clock, Trophy, Users, ArrowRight, Share2, MapPin, Globe, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { SectionPreview } from '../dashboard/builder/SectionBlocks';
-
-interface PublicProgramPageProps {
-    onNavigate: (page: string) => void;
-    programId?: string;
-}
+import { useNavigate, useParams } from 'react-router-dom';
 
 interface Category {
     id: string;
@@ -20,7 +15,9 @@ interface Category {
     children?: Category[];
 }
 
-export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate, programId: propProgramId }) => {
+export const PublicProgramPage: React.FC = () => {
+    const navigate = useNavigate();
+    const { slug: slugParam } = useParams<{ slug?: string }>();
     const [program, setProgram] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -62,12 +59,8 @@ export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate
         const fetchProgram = async () => {
             try {
                 const params = new URLSearchParams(window.location.search);
-                const id = propProgramId || params.get('id');
-                
-                // Check for slug-based URL: /program/my-slug
-                const pathname = window.location.pathname;
-                const slugMatch = pathname.match(/^\/program\/(.+)$/);
-                const slug = slugMatch ? decodeURIComponent(slugMatch[1]) : null;
+                const id = params.get('id');
+                const slug = slugParam || null;
 
                 if (!id && !slug) {
                     setError('Program ID is required');
@@ -111,7 +104,13 @@ export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate
         };
 
         fetchProgram();
-    }, [propProgramId]);
+    }, [slugParam]);
+
+    const handleSectionNavigate = (target: string) => {
+        if (!target) return;
+        const path = target.startsWith('/') ? target : `/${target}`;
+        navigate(path);
+    };
 
     const handleApply = () => {
         if (!program) return;
@@ -122,14 +121,14 @@ export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate
             const currentUrl = window.location.href;
             sessionStorage.setItem('returnUrl', currentUrl);
             sessionStorage.setItem('pendingAction', `apply:${program.id}`);
-            onNavigate('login');
+            navigate('/login');
             return;
         }
 
         // Redirect to form submission or application flow
         // For now, we'll assume there's a default form or we use the first form available
         // Ideally we'd fetch the specific form for this program
-        onNavigate('dashboard'); // Placeholder: redirect to dashboard where they can see applications
+        navigate('/dashboard');
     };
 
     const CategoryNode: React.FC<{
@@ -216,7 +215,7 @@ export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate
                     </div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-4">Program Not Found</h1>
                     <p className="text-slate-600 mb-8">{error || "We couldn't find the program you're looking for."}</p>
-                    <Button onClick={() => onNavigate('home')}>Go Home</Button>
+                    <Button onClick={() => navigate('/')}>Go Home</Button>
                 </div>
             </div>
         );
@@ -235,7 +234,7 @@ export const PublicProgramPage: React.FC<PublicProgramPageProps> = ({ onNavigate
                 {sections.length > 0 ? (
                     sections.map(section => (
                         <div key={section.id} id={section.section_type}>
-                            <SectionPreview section={section} onNavigate={onNavigate} />
+                            <SectionPreview section={section} onNavigate={handleSectionNavigate} />
                         </div>
                     ))
                 ) : (

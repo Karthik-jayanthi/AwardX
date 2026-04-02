@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../Button';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { FormField, FormPage, FormTheme } from '../dashboard/FormBuilder';
 import { db } from '../../services/database';
 import { submissionDrafts, formAnalytics } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { supabase } from '../../services/supabase';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown } from 'lucide-react';
+import { PaymentConfig } from '../../services/models';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface FormSubmissionPageProps {
-  onNavigate: (page: string) => void;
-  formId?: string;
-}
 
 const defaultTheme: FormTheme = {
   primaryColor: '#6366f1',
@@ -25,24 +22,27 @@ const defaultTheme: FormTheme = {
   fontFamily: 'Inter, sans-serif',
 };
 
-export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNavigate, formId: propFormId }) => {
+export const FormSubmissionPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { formId: formIdParam } = useParams<{ formId?: string }>();
+
   // Get formId from URL params or props
   const getFormIdFromUrl = () => {
     try {
       const params = new URLSearchParams(window.location.search);
-      return params.get('formId') || propFormId || window.location.search.split('formId=')[1]?.split('&')[0];
+      return formIdParam || params.get('formId') || window.location.search.split('formId=')[1]?.split('&')[0];
     } catch (e) {
       console.error('Error getting formId from URL:', e);
-      return propFormId || null;
+      return formIdParam || null;
     }
   };
 
-  const [formId, setFormId] = useState<string | null>(() => {
+  const [formId] = useState<string | null>(() => {
     try {
-      return propFormId || getFormIdFromUrl();
+      return getFormIdFromUrl();
     } catch (e) {
       console.error('Error initializing formId:', e);
-      return propFormId || null;
+      return formIdParam || null;
     }
   });
 
@@ -57,53 +57,42 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [paymentState, setPaymentState] = useState<'idle' | 'success' | 'cancelled'>('idle');
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
 
-  // Check authentication for personalization, but allow public access
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        setIsCheckingAuth(true);
+  const completeSubmissionSideEffects = async (currentFormId: string) => {
+    const { user } = await auth.getUser();
+    formAnalytics.track({ form_id: currentFormId, event_type: 'complete', user_id: user?.id }).catch(() => {});
+    submissionDrafts.delete(currentFormId, user?.id).catch(() => {});
+  };
 
-        // Small delay to ensure session is loaded after redirect
-        await new Promise(resolve => setTimeout(resolve, 100));
+  const loadRazorpayScript = async (): Promise<boolean> => {
+    if ((window as any).Razorpay) return true;
 
-        const { session } = await auth.getSession();
-
-        setIsAuthenticated(!!session);
-        setIsCheckingAuth(false);
-      } catch (err) {
-        console.error('Error checking auth:', err);
-        setIsAuthenticated(false);
-        setIsCheckingAuth(false);
-      }
-    };
-
-    checkAuth();
-
-    // Also listen for auth state changes
-    const { data } = auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        setIsAuthenticated(true);
-        setIsCheckingAuth(false);
-      } else if (event === 'SIGNED_OUT') {
-        setIsAuthenticated(false);
-      }
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
     });
+  };
 
-    return () => {
-      if (data?.subscription) {
-        data.subscription.unsubscribe();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'success') {
+      setIsSubmitted(true);
+      setPaymentState('success');
+      setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
+    }
+    if (params.get('payment') === 'cancelled') {
+      setPaymentState('cancelled');
+      setPaymentMessage('Payment was cancelled. You can submit again to complete payment.');
+    }
   }, []);
 
   useEffect(() => {
-    // Only load form if authenticated
-    if (isCheckingAuth) return;
-
     const currentFormId = formId || getFormIdFromUrl();
     if (!currentFormId) {
       setIsError('Form ID is required');
@@ -145,6 +134,26 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
         setFormPages(form.pages || [{ id: 'page-1', title: 'Page 1', order: 0 }]);
         setTheme(form.theme || defaultTheme);
 
+        const { data: paymentConfigRow } = await supabase
+          .from('program_payment_configs')
+          .select('*')
+          .eq('program_id', form.program_id)
+          .maybeSingle();
+
+        if (paymentConfigRow) {
+          const provider = String(paymentConfigRow.provider || 'stripe').toLowerCase();
+          setPaymentConfig({
+            enabled: !!paymentConfigRow.enabled,
+            provider: provider === 'paypal' ? 'PayPal' : provider === 'razorpay' ? 'Razorpay' : 'Stripe',
+            currency: paymentConfigRow.currency || 'USD',
+            fee: Number(paymentConfigRow.fee_amount) || 0,
+            connected: !!paymentConfigRow.connected,
+            publicKey: paymentConfigRow.public_key || undefined,
+          });
+        } else {
+          setPaymentConfig(null);
+        }
+
         // Load form fields
         const fields = await db.getFormFields(currentFormId);
         if (fields) {
@@ -173,7 +182,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     };
 
     loadForm();
-  }, [isCheckingAuth, formId]);
+  }, [formId, formIdParam]);
 
   // Restore draft data after form loads
   useEffect(() => {
@@ -224,11 +233,6 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
   const pageFields = formFields.filter(f => f.pageId === currentPage?.id);
   const isLastPage = currentPageIdx === formPages.length - 1;
 
-  const handleLogout = async () => {
-    await auth.signOut();
-    onNavigate('home');
-  };
-
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
   };
@@ -272,19 +276,100 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
 
     try {
       setIsSubmitting(true);
-      // Submit form data to backend - saved in submissions table
-      await db.submitFormResponse(currentFormId, formData);
+      const paymentRequired = !!(paymentConfig?.enabled && (paymentConfig?.fee || 0) > 0 && programId);
 
-      // Track completion and clean up draft
-      const { user } = await auth.getUser();
-      formAnalytics.track({ form_id: currentFormId, event_type: 'complete', user_id: user?.id }).catch(() => {});
-      submissionDrafts.delete(currentFormId, user?.id).catch(() => {});
+      const submission: any = await db.submitFormResponse(currentFormId, formData, paymentRequired
+        ? {
+            paymentRequired: true,
+            paymentAmount: Number(paymentConfig?.fee || 0),
+          }
+        : undefined);
+
+      if (paymentRequired && submission?.id && programId) {
+        const checkoutResponse = await fetch('/api/payments/create-checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            submissionId: submission.id,
+            programId,
+            formId: currentFormId,
+            currency: paymentConfig?.currency || 'USD',
+          }),
+        });
+
+        const checkoutPayload = await checkoutResponse.json();
+        if (!checkoutResponse.ok) {
+          throw new Error(checkoutPayload?.error || 'Failed to initialize payment checkout');
+        }
+
+        if (checkoutPayload.provider === 'razorpay') {
+          const scriptLoaded = await loadRazorpayScript();
+          if (!scriptLoaded) {
+            throw new Error('Unable to load Razorpay checkout script.');
+          }
+
+          const options = {
+            key: checkoutPayload.keyId,
+            amount: checkoutPayload.amount,
+            currency: checkoutPayload.currency,
+            name: checkoutPayload.name,
+            description: checkoutPayload.description,
+            order_id: checkoutPayload.orderId,
+            handler: async (response: any) => {
+              const verifyResponse = await fetch('/api/payments/razorpay-verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  submissionId: submission.id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              });
+
+              const verifyPayload = await verifyResponse.json();
+              if (!verifyResponse.ok) {
+                throw new Error(verifyPayload?.error || 'Razorpay payment verification failed');
+              }
+
+              await completeSubmissionSideEffects(currentFormId);
+              setPaymentState('success');
+              setPaymentMessage('Payment completed and submission received.');
+              setIsSubmitted(true);
+            },
+            modal: {
+              ondismiss: () => {
+                setPaymentState('cancelled');
+                setPaymentMessage('Payment was cancelled. Your draft is saved. You can submit again anytime.');
+              },
+            },
+            notes: checkoutPayload.notes,
+            prefill: checkoutPayload.prefill,
+            theme: { color: theme.primaryColor },
+          };
+
+          const razorpay = new (window as any).Razorpay(options);
+          razorpay.open();
+          return;
+        }
+
+        if (!checkoutPayload?.url) {
+          throw new Error('Missing checkout URL for Stripe payment');
+        }
+
+        window.location.href = checkoutPayload.url;
+        return;
+      }
+
+      await completeSubmissionSideEffects(currentFormId);
 
       setIsSubmitted(true);
-      setIsSubmitting(false);
+      setPaymentState('idle');
+      setPaymentMessage(null);
     } catch (err: any) {
       console.error('Form submission error:', err);
       alert('Failed to submit form: ' + (err.message || 'Unknown error'));
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -405,19 +490,6 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
     }
   };
 
-  // Show loading while checking authentication
-  // Only show this if we haven't redirected to login yet
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-slate-600">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -441,7 +513,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Error</h2>
             <p className="text-slate-600 mb-6">{error}</p>
-            <Button onClick={() => onNavigate('home')}>Go Home</Button>
+            <Button onClick={() => navigate('/')}>Go Home</Button>
           </div>
         </div>
       </div>
@@ -461,7 +533,7 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
             >
               <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto mb-6" />
               <h2 className="text-3xl font-bold text-slate-900 mb-4">Thank You!</h2>
-              <p className="text-lg text-slate-600">Your form has been submitted successfully.</p>
+              <p className="text-lg text-slate-600">{paymentMessage || 'Your form has been submitted successfully.'}</p>
             </motion.div>
           </div>
         </div>
@@ -484,6 +556,16 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
   return (
     <div className="min-h-screen bg-slate-50" style={{ backgroundColor: theme.backgroundColor }}>
       <div className="min-h-[80vh] flex flex-col justify-center py-12 px-4">
+
+        {paymentState === 'cancelled' && (
+          <div className="max-w-5xl mx-auto mb-4 w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 mt-0.5" />
+            <div>
+              <p className="font-semibold">Payment cancelled</p>
+              <p className="text-sm">{paymentMessage || 'Your draft is safe. Submit again when you are ready to complete payment.'}</p>
+            </div>
+          </div>
+        )}
 
         <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden" style={{ borderRadius: theme.borderRadius }}>
           <div className="h-2" style={{ background: `linear-gradient(to right, ${theme.primaryColor}, ${theme.secondaryColor})` }} />
@@ -551,7 +633,9 @@ export const FormSubmissionPage: React.FC<FormSubmissionPageProps> = ({ onNaviga
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Submitting...
                     </>
                   ) : (
-                    'Submit'
+                    paymentConfig?.enabled && Number(paymentConfig?.fee || 0) > 0
+                      ? `Continue to Payment (${paymentConfig.currency} ${Number(paymentConfig.fee || 0).toFixed(2)})`
+                      : 'Submit'
                   )}
                 </Button>
               ) : (

@@ -26,43 +26,27 @@ export const isSupabaseReady = () => supabase !== null;
 // HELPER FUNCTIONS FOR USER/ORG CONTEXT
 // ============================================================================
 
-// Get current user ID (cached for performance)
-let cachedUserId: string | null = null;
-let cachedOrgId: string | null = null;
-
 // Helper to get current user ID
 export const getCurrentUserId = async (): Promise<string | null> => {
-  if (cachedUserId) return cachedUserId;
   if (!supabase) return null;
   const { user } = await auth.getUser();
-  if (user) {
-    cachedUserId = user.id;
-    return user.id;
-  }
-  return null;
+  return user?.id || null;
 };
 
 // Helper to get current organization ID
 export const getCurrentOrgId = async (): Promise<string | null> => {
-  if (cachedOrgId) return cachedOrgId;
   const org = await organizations.getCurrent();
-  if (org.data?.id) {
-    cachedOrgId = org.data.id;
-    return org.data.id;
-  }
-  return null;
+  return org.data?.id || null;
 };
 
 // Clear cache (call on logout or when user changes)
 export const clearUserCache = () => {
-  cachedUserId = null;
-  cachedOrgId = null;
+  // No-op: cache removed.
 };
 
 // Refresh cache (call after login or when org changes)
 export const refreshUserCache = async () => {
-  cachedUserId = null;
-  cachedOrgId = null;
+  // No-op beyond triggering fresh reads.
   await getCurrentUserId();
   await getCurrentOrgId();
 };
@@ -147,7 +131,7 @@ export const auth = {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${siteUrl}`,
+        redirectTo: `${siteUrl}/auth/callback`,
       },
     });
     return { data, error };
@@ -283,7 +267,6 @@ export const organizations = {
         .single();
 
       if (org) {
-        cachedOrgId = org.id;
         return { data: org as { id: string }, error: null };
       }
 
@@ -319,7 +302,6 @@ export const organizations = {
         .single();
 
       if (org) {
-        cachedOrgId = org.id;
         return { data: org as { id: string }, error: null };
       }
 
@@ -337,7 +319,6 @@ export const organizations = {
       return { data: null, error: orgError || 'Organization not found' };
     }
 
-    cachedOrgId = org.id;
     return { data: org as { id: string }, error: null };
   },
 
@@ -361,7 +342,6 @@ export const organizations = {
         .update({ organization_id: existingOrg.id })
         .eq('id', user.id);
 
-      cachedOrgId = existingOrg.id;
       return { data: existingOrg, error: null };
     }
 
@@ -381,7 +361,6 @@ export const organizations = {
           .single();
 
         if (org) {
-          cachedOrgId = org.id;
           return { data: org, error: null };
         }
       }
@@ -416,7 +395,6 @@ export const organizations = {
             .update({ organization_id: existing.id })
             .eq('id', user.id);
 
-          cachedOrgId = existing.id;
           return { data: existing, error: null };
         }
       }
@@ -453,8 +431,6 @@ export const organizations = {
     }
 
     // Clear cache
-    cachedOrgId = org.id;
-
     return { data: org, error: null };
   },
 
@@ -906,6 +882,9 @@ export const submissions = {
     programId?: string;
     categoryId?: string;
     status?: string;
+    page?: number;
+    pageSize?: number;
+    search?: string;
   }) => {
     const orgId = await getCurrentOrgId();
     if (!orgId) return { data: [], error: null };
@@ -919,6 +898,11 @@ export const submissions = {
     if (!orgPrograms || orgPrograms.length === 0) return { data: [], error: null };
 
     const programIds = orgPrograms.map(p => p.id);
+    const page = Math.max(1, filters?.page || 1);
+    const pageSize = Math.max(1, Math.min(100, filters?.pageSize || 0));
+    const usePagination = pageSize > 0;
+    const offset = (page - 1) * (usePagination ? pageSize : 1);
+
     let query = supabase
       .from('submissions')
       .select(`
@@ -927,7 +911,7 @@ export const submissions = {
         categories(title),
         submission_files(*),
         submission_judges(judge_id)
-      `)
+      `, { count: usePagination ? 'exact' : undefined })
       .in('program_id', programIds)
       .order('submitted_at', { ascending: false });
 
@@ -946,8 +930,18 @@ export const submissions = {
       query = query.eq('status', filters.status);
     }
 
+    if (filters?.search?.trim()) {
+      const search = filters.search.trim();
+      query = query.or(`title.ilike.%${search}%,applicant_name.ilike.%${search}%,applicant_email.ilike.%${search}%`);
+    }
+
+    if (usePagination) {
+      const { data, error, count } = await query.range(offset, offset + pageSize - 1);
+      return { data, error, count };
+    }
+
     const { data, error } = await query;
-    return { data, error };
+    return { data, error, count: data?.length || 0 };
   },
 
   getById: async (id: string) => {
@@ -979,6 +973,9 @@ export const submissions = {
     category_id?: string;
     title: string;
     description?: string;
+    payment_status?: string;
+    payment_amount?: number;
+    payment_id?: string;
     submission_data?: Record<string, any>;
     allowPublicSubmission?: boolean; // Flag for public form submissions (not a DB column)
   }) => {
@@ -2247,6 +2244,7 @@ export const storage = {
 
 export const realtime = {
   subscribeToSubmissions: (programId: string, callback: (payload: any) => void) => {
+    if (!supabase) return null as any;
     return supabase
       .channel(`submissions:${programId}`)
       .on(
@@ -2262,7 +2260,66 @@ export const realtime = {
       .subscribe();
   },
 
+  subscribeToJudgingProgress: (programId: string, callback: (payload: any) => void) => {
+    if (!supabase) return null as any;
+
+    return supabase
+      .channel(`judging:${programId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'submission_judges',
+        },
+        callback
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'scores',
+        },
+        callback
+      )
+      .subscribe();
+  },
+
+  subscribeToAuditLogs: (callback: (payload: any) => void) => {
+    if (!supabase) return null as any;
+    return supabase
+      .channel('audit-logs')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'audit_logs',
+        },
+        callback
+      )
+      .subscribe();
+  },
+
+  subscribeToNotifications: (callback: (payload: any) => void) => {
+    if (!supabase) return null as any;
+    return supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+        },
+        callback
+      )
+      .subscribe();
+  },
+
   subscribeToMessages: (threadId: string, callback: (payload: any) => void) => {
+    if (!supabase) return null as any;
     return supabase
       .channel(`messages:${threadId}`)
       .on(
@@ -2279,7 +2336,9 @@ export const realtime = {
   },
 
   unsubscribe: (channel: any) => {
-    supabase.removeChannel(channel);
+    if (supabase && channel) {
+      supabase.removeChannel(channel);
+    }
   },
 };
 

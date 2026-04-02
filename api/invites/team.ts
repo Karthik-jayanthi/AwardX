@@ -1,4 +1,6 @@
 import { Resend } from 'resend';
+import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
+import { teamInviteSchema } from '../_utils/validation';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -6,11 +8,21 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const { email, roleName, programTitle, inviteUrl } = req.body || {};
-  if (!email || !programTitle) {
-    res.status(400).json({ error: 'email and programTitle are required' });
+  const ip = getClientIp(req);
+  const rateLimit = enforceRateLimit(`team-invite:${ip}`, 10, 15 * 60 * 1000);
+  if (!rateLimit.ok) {
+    res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+    res.status(429).json({ error: 'Rate limit exceeded. Try again later.' });
     return;
   }
+
+  const parsed = teamInviteSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request payload', details: parsed.error.flatten() });
+    return;
+  }
+
+  const { email, roleName, programTitle, inviteUrl } = parsed.data;
 
   const resendApiKey = process.env.RESEND_API_KEY || '';
   if (!resendApiKey) {
