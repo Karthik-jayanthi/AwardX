@@ -1,9 +1,9 @@
 import Stripe from 'stripe';
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { getAuthenticatedUser } from '../_utils/authUser';
-import { stripeConnectStatusSchema } from '../_utils/validation';
-import { deriveStripeConnectStatus } from '../_utils/stripeConnect';
-import { logError, logInfo, logWarn } from '../_utils/logger';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { stripeConnectStatusSchema } from '../../_utils/validation';
+import { deriveStripeConnectStatus } from '../../_utils/stripeConnect';
+import { logError, logInfo, logWarn } from '../../_utils/logger';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {

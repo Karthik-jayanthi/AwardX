@@ -1,7 +1,7 @@
-import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { getAuthenticatedUser } from '../_utils/authUser';
-import { judgeAssignedNotificationSchema } from '../_utils/validation';
+import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { newSubmissionNotificationSchema } from '../../_utils/validation';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -16,20 +16,20 @@ export default async function handler(req: any, res: any) {
   }
 
   const ip = getClientIp(req);
-  const rateLimit = enforceRateLimit(`notify-judge-assigned:${ip}`, 20, 15 * 60 * 1000);
+  const rateLimit = enforceRateLimit(`notify-new-submission:${ip}`, 20, 15 * 60 * 1000);
   if (!rateLimit.ok) {
     res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
     res.status(429).json({ error: 'Rate limit exceeded. Try again later.' });
     return;
   }
 
-  const parsed = judgeAssignedNotificationSchema.safeParse(req.body || {});
+  const parsed = newSubmissionNotificationSchema.safeParse(req.body || {});
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid request payload', details: parsed.error.flatten() });
     return;
   }
 
-  const { organizationId, programId, submissionId, judgeId, judgeName, submissionTitle } = parsed.data;
+  const { organizationId, programId, submissionId, submissionTitle, applicantName } = parsed.data;
 
   try {
     const supabase = createSupabaseAdmin();
@@ -40,26 +40,28 @@ export default async function handler(req: any, res: any) {
       .eq('organization_id', organizationId);
 
     const recipients = (members || []).map((member: any) => member.user_id).filter(Boolean);
-    const title = 'Judge assigned';
-    const body = `${judgeName} was assigned to review "${submissionTitle}".`;
+    const title = 'New submission received';
+    const body = applicantName
+      ? `${applicantName} submitted "${submissionTitle}".`
+      : `A new submission "${submissionTitle}" was received.`;
 
     const records = recipients.length > 0
       ? recipients.map((recipientUserId: string) => ({
           organization_id: organizationId,
           program_id: programId,
           recipient_user_id: recipientUserId,
-          type: 'judging',
+          type: 'submission',
           title,
           body,
-          metadata: { submissionId, judgeId },
+          metadata: { submissionId },
         }))
       : [{
           organization_id: organizationId,
           program_id: programId,
-          type: 'judging',
+          type: 'submission',
           title,
           body,
-          metadata: { submissionId, judgeId },
+          metadata: { submissionId },
         }];
 
     const { error } = await supabase.from('notifications').insert(records);

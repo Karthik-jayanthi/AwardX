@@ -79,7 +79,7 @@ export const createCheckoutSchema = z.object({
 export const stripeWebhookFallbackSchema = z.object({
   type: z.string().trim().min(1),
   data: z.object({
-    object: z.record(z.any()),
+    object: z.record(z.string(), z.any()),
   }),
 });
 

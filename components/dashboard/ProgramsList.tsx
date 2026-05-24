@@ -5,6 +5,7 @@ import { db } from '../../services/database';
 import { Program, PaymentConfig } from '../../services/models';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
+import { AppDatePicker } from '../ui/AppDateFields';
 
 export const ProgramsList: React.FC = () => {
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -181,13 +182,10 @@ export const ProgramsList: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Deadline</label>
-              <input 
-                required
-                type="date"
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={newProgram.deadline}
-                onChange={e => setNewProgram({...newProgram, deadline: e.target.value})}
+              <AppDatePicker
+                label="Deadline"
+                value={newProgram.deadline || null}
+                onChange={(deadline) => setNewProgram({ ...newProgram, deadline: deadline || '' })}
               />
             </div>
           </div>

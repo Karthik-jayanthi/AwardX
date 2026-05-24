@@ -1,10 +1,10 @@
 import { Resend } from 'resend';
-import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
-import { teamInviteSchema } from '../_utils/validation';
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { getAuthenticatedUser } from '../_utils/authUser';
-import { createEmailLog, updateEmailLog } from '../_utils/emailLogs';
-import { canManageInvites } from '../_utils/invitePermissions';
+import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
+import { teamInviteSchema } from '../../_utils/validation';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { createEmailLog, updateEmailLog } from '../../_utils/emailLogs';
+import { canManageInvites } from '../../_utils/invitePermissions';
 
 const INVITE_TTL_DAYS = 30;
 

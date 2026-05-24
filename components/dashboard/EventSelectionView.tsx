@@ -10,6 +10,7 @@ import { auth } from '../../services/supabase';
 import { db as databaseService } from '../../services/database';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
+import { AppDatePicker } from '../ui/AppDateFields';
 
 interface UserData {
    name: string;
@@ -638,17 +639,11 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                   </select>
                </div>
                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Submission Deadline</label>
-                  <div className="relative">
-                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                     <input
-                        required
-                        type="date"
-                        className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
-                        value={newEvent.deadline}
-                        onChange={e => setNewEvent({ ...newEvent, deadline: e.target.value })}
-                     />
-                  </div>
+                  <AppDatePicker
+                     label="Submission Deadline"
+                     value={newEvent.deadline || null}
+                     onChange={(deadline) => setNewEvent({ ...newEvent, deadline: deadline || '' })}
+                  />
                </div>
                <div className="bg-emerald-50 p-4 rounded-xl text-sm text-emerald-800 flex gap-3 items-start mt-4 border border-emerald-100">
                   <Sparkles className="w-5 h-5 shrink-0 mt-0.5 text-emerald-700" />
@@ -713,17 +708,11 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                   </select>
                </div>
                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Submission Deadline</label>
-                  <div className="relative">
-                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                     <input
-                        required
-                        type="date"
-                        className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
-                        value={editingEvent.deadline}
-                        onChange={e => setEditingEvent({ ...editingEvent, deadline: e.target.value })}
-                     />
-                  </div>
+                  <AppDatePicker
+                     label="Submission Deadline"
+                     value={editingEvent.deadline || null}
+                     onChange={(deadline) => setEditingEvent({ ...editingEvent, deadline: deadline || '' })}
+                  />
                </div>
                <div className="pt-4 flex justify-end gap-3">
                   <Button type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} disabled={isUpdating}>Cancel</Button>

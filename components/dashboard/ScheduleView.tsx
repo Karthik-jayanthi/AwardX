@@ -13,6 +13,7 @@ import {
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
+import { AppDatePicker } from '../ui/AppDateFields';
 import { queryKeys } from '../../services/queryKeys';
 
 interface ScheduleViewProps {
@@ -71,26 +72,17 @@ const RoundForm: React.FC<RoundFormProps> = ({ value, onChange, onSubmit, onCanc
     </div>
 
     <div className="grid grid-cols-2 gap-4">
-      <div>
-        <label className="block text-sm font-semibold text-slate-700 mb-1">Start Date</label>
-        <input
-          type="date"
-          required
-          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-          value={value.startDate ?? ''}
-          onChange={e => onChange({ ...value, startDate: e.target.value })}
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-semibold text-slate-700 mb-1">End Date</label>
-        <input
-          type="date"
-          required
-          className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-          value={value.endDate ?? ''}
-          onChange={e => onChange({ ...value, endDate: e.target.value })}
-        />
-      </div>
+      <AppDatePicker
+        label="Start Date"
+        value={value.startDate ?? null}
+        onChange={(startDate) => onChange({ ...value, startDate: startDate || '' })}
+      />
+      <AppDatePicker
+        label="End Date"
+        value={value.endDate ?? null}
+        minDate={value.startDate ?? null}
+        onChange={(endDate) => onChange({ ...value, endDate: endDate || '' })}
+      />
     </div>
 
     <div>

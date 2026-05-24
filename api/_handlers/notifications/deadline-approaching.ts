@@ -1,6 +1,6 @@
-import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { deadlineApproachingNotificationSchema } from '../_utils/validation';
+import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { deadlineApproachingNotificationSchema } from '../../_utils/validation';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

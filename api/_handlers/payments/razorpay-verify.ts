@@ -1,7 +1,7 @@
 import crypto from 'crypto';
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { razorpayVerifySchema } from '../_utils/validation';
-import { logError, logInfo, logWarn } from '../_utils/logger';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { razorpayVerifySchema } from '../../_utils/validation';
+import { logError, logInfo, logWarn } from '../../_utils/logger';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

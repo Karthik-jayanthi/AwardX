@@ -19,6 +19,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { Toaster } from 'sonner';
 import { initSentry } from './services/sentry';
 import { SupabaseNetworkLoader } from './components/SupabaseNetworkLoader';
+import { MuiPickersProvider } from './components/providers/MuiPickersProvider';
 
 const isProd = import.meta.env.PROD;
 if (isProd) {
@@ -47,16 +48,18 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <ProgramProvider>
-            <SupabaseNetworkLoader />
-            <App />
+      <MuiPickersProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <ProgramProvider>
+              <SupabaseNetworkLoader />
+              <App />
             {isProd ? <Analytics /> : null}
             <Toaster richColors position="top-right" />
-          </ProgramProvider>
-        </AuthProvider>
-      </BrowserRouter>
+            </ProgramProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </MuiPickersProvider>
     </QueryClientProvider>
   </React.StrictMode>
 );

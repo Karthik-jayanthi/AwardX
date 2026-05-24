@@ -4,6 +4,7 @@ import { X, Save, Trash2, Calendar, Users, Eye, EyeOff, Settings, Plus } from 'l
 import { Button } from '../../Button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { OutputPortConfigModal } from './OutputPortConfigModal';
+import { AppDateTimePicker } from '../../ui/AppDateFields';
 
 interface RoundConfigurationPanelProps {
   round: Round;
@@ -293,11 +294,15 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                 </div>
                 {formData.startCondition.type === 'fixed_datetime' && (
                   <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                    <input
-                      type="datetime-local"
-                      value={formData.startCondition.datetime ? new Date(formData.startCondition.datetime).toISOString().slice(0, 16) : ''}
-                      onChange={(e) => handleStartConditionChange({ type: 'fixed_datetime', datetime: new Date(e.target.value).toISOString() })}
-                      className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all"
+                    <AppDateTimePicker
+                      label="Start date & time"
+                      value={formData.startCondition.datetime || null}
+                      onChange={(datetime) =>
+                        handleStartConditionChange({
+                          type: 'fixed_datetime',
+                          datetime: datetime || new Date().toISOString(),
+                        })
+                      }
                     />
                   </motion.div>
                 )}
@@ -348,11 +353,20 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                 </div>
                 {formData.endCondition.type === 'fixed_datetime' && (
                   <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                    <input
-                      type="datetime-local"
-                      value={formData.endCondition.datetime ? new Date(formData.endCondition.datetime).toISOString().slice(0, 16) : ''}
-                      onChange={(e) => handleEndConditionChange({ type: 'fixed_datetime', datetime: new Date(e.target.value).toISOString() })}
-                      className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all"
+                    <AppDateTimePicker
+                      label="End date & time"
+                      value={formData.endCondition.datetime || null}
+                      minDate={
+                        formData.startCondition.type === 'fixed_datetime'
+                          ? formData.startCondition.datetime
+                          : null
+                      }
+                      onChange={(datetime) =>
+                        handleEndConditionChange({
+                          type: 'fixed_datetime',
+                          datetime: datetime || new Date().toISOString(),
+                        })
+                      }
                     />
                   </motion.div>
                 )}

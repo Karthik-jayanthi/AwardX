@@ -1,6 +1,6 @@
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { getAuthenticatedUser } from '../_utils/authUser';
-import { logError } from '../_utils/logger';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { logError } from '../../_utils/logger';
 
 const toTitleCase = (value: string) =>
   (value || '')

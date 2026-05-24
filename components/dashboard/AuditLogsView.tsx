@@ -7,6 +7,7 @@ import { UserHoverCard } from '../UserHoverCard';
 import { TableSkeleton } from '../SkeletonLoader';
 import { realtime, supabase } from '../../services/supabase';
 import { toast } from 'sonner';
+import { AppDatePicker } from '../ui/AppDateFields';
 
 const getTypeIcon = (type: string) => {
   switch (type) {
@@ -205,24 +206,19 @@ export const AuditLogsView: React.FC = () => {
         {/* Date range filter */}
         {showDateFilter && (
           <div className="p-4 border-b border-slate-200 bg-indigo-50/30 flex flex-wrap items-end gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
-            </div>
+            <AppDatePicker
+              label="Start Date"
+              value={startDate || null}
+              onChange={(value) => { setStartDate(value || ''); setPage(1); }}
+              className="min-w-[200px]"
+            />
+            <AppDatePicker
+              label="End Date"
+              value={endDate || null}
+              minDate={startDate || null}
+              onChange={(value) => { setEndDate(value || ''); setPage(1); }}
+              className="min-w-[200px]"
+            />
             {(startDate || endDate) && (
               <>
                 <button

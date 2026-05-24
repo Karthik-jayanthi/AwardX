@@ -1,7 +1,7 @@
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { getAuthenticatedUser } from '../_utils/authUser';
-import { withdrawSubmissionSchema } from '../_utils/validation';
-import { logError, logWarn } from '../_utils/logger';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { withdrawSubmissionSchema } from '../../_utils/validation';
+import { logError, logWarn } from '../../_utils/logger';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

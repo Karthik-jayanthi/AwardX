@@ -84,3 +84,17 @@ npm run dev:all     # starts client + server
 curl http://localhost:5001/api/health
 curl http://localhost:3000/api/overview/public/by-slug/Beautiful-Hearts
 ```
+
+---
+
+## Vercel Hobby plan (fixed)
+
+### BUG-016 — Too many serverless functions (>12)
+- **Status:** Fixed — all routes consolidated into `api/[...path].ts` (1 function)
+- Handler code lives under `api/_handlers/` (not deployed as separate functions)
+
+### BUG-017 — `z.record(z.any())` Zod 4 type error
+- **Status:** Fixed — `z.record(z.string(), z.any())` in `api/_utils/validation.ts`
+
+### BUG-018 — MUI date pickers
+- **Status:** Fixed — `@mui/x-date-pickers` + `AppDatePicker` / `AppDateTimePicker` app-wide

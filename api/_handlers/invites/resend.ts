@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto';
 import { Resend } from 'resend';
-import { getAuthenticatedUser } from '../_utils/authUser';
-import { canManageInvites } from '../_utils/invitePermissions';
-import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { resendInviteSchema } from '../_utils/validation';
-import { createEmailLog, updateEmailLog } from '../_utils/emailLogs';
+import { getAuthenticatedUser } from '../../_utils/authUser';
+import { canManageInvites } from '../../_utils/invitePermissions';
+import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { resendInviteSchema } from '../../_utils/validation';
+import { createEmailLog, updateEmailLog } from '../../_utils/emailLogs';
 
 const INVITE_TTL_DAYS = 30;
 

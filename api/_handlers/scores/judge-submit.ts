@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { enforceRateLimit, getClientIp } from '../_utils/rateLimit';
-import { judgeSubmitScoresSchema } from '../_utils/validation';
+import { enforceRateLimit, getClientIp } from '../../_utils/rateLimit';
+import { judgeSubmitScoresSchema } from '../../_utils/validation';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

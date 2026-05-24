@@ -6,6 +6,7 @@ import {
   shortlistConfigToCriteria,
   roundUsesShortlist,
 } from '../../../lib/roundScheduleUtils';
+import { AppDateTimePicker } from '../../ui/AppDateFields';
 
 interface SimpleRoundEditorProps {
   round: Round;
@@ -100,35 +101,34 @@ export const SimpleRoundEditor: React.FC<SimpleRoundEditorProps> = ({ round, onS
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Start</label>
-            <input
-              type="datetime-local"
-              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={startIso ? startIso.slice(0, 16) : ''}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  startCondition: { type: 'fixed_datetime', datetime: new Date(e.target.value).toISOString() },
-                })
-              }
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">End</label>
-            <input
-              type="datetime-local"
-              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={endIso ? endIso.slice(0, 16) : ''}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  endCondition: { type: 'fixed_datetime', datetime: new Date(e.target.value).toISOString() },
-                })
-              }
-            />
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <AppDateTimePicker
+            label="Start"
+            className="mt-1.5"
+            value={startIso || null}
+            onChange={(datetime) =>
+              setForm({
+                ...form,
+                startCondition: datetime
+                  ? { type: 'fixed_datetime', datetime }
+                  : { type: 'manual_trigger' },
+              })
+            }
+          />
+          <AppDateTimePicker
+            label="End"
+            className="mt-1.5"
+            value={endIso || null}
+            minDate={startIso || null}
+            onChange={(datetime) =>
+              setForm({
+                ...form,
+                endCondition: datetime
+                  ? { type: 'fixed_datetime', datetime }
+                  : { type: 'manual_close' },
+              })
+            }
+          />
         </div>
 
         {showShortlist && (

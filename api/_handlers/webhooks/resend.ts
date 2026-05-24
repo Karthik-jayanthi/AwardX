@@ -1,5 +1,5 @@
-import { createSupabaseAdmin } from '../_utils/supabaseAdmin';
-import { resendWebhookSchema } from '../_utils/validation';
+import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
+import { resendWebhookSchema } from '../../_utils/validation';
 
 function mapEventTypeToStatus(eventType: string): 'delivered' | 'bounced' | 'complained' | 'sent' | null {
   const normalized = eventType.toLowerCase();
