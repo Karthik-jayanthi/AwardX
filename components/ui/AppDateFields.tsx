@@ -1,7 +1,6 @@
 import React from 'react';
-import TextField from '@mui/material/TextField';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { DesktopDatePicker } from '@mui/x-date-pickers/DesktopDatePicker';
+import { DesktopDateTimePicker } from '@mui/x-date-pickers/DesktopDateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 
 type BaseProps = {
@@ -20,7 +19,7 @@ function toDayjs(value?: string | null): Dayjs | null {
   return parsed.isValid() ? parsed : null;
 }
 
-const textFieldSlot = (className?: string) => ({
+const fieldSlotProps = (className?: string) => ({
   textField: {
     size: 'small' as const,
     fullWidth: true,
@@ -37,7 +36,7 @@ export const AppDatePicker: React.FC<BaseProps> = ({
   minDate,
   maxDate,
 }) => (
-  <DatePicker
+  <DesktopDatePicker
     label={label}
     value={toDayjs(value)}
     onChange={(next: Dayjs | null) => {
@@ -46,8 +45,7 @@ export const AppDatePicker: React.FC<BaseProps> = ({
     disabled={disabled}
     minDate={toDayjs(minDate) ?? undefined}
     maxDate={toDayjs(maxDate) ?? undefined}
-    slots={{ textField: TextField }}
-    slotProps={textFieldSlot(className)}
+    slotProps={fieldSlotProps(className)}
   />
 );
 
@@ -60,7 +58,7 @@ export const AppDateTimePicker: React.FC<BaseProps> = ({
   minDate,
   maxDate,
 }) => (
-  <DateTimePicker
+  <DesktopDateTimePicker
     label={label}
     value={toDayjs(value)}
     onChange={(next: Dayjs | null) => {
@@ -69,7 +67,6 @@ export const AppDateTimePicker: React.FC<BaseProps> = ({
     disabled={disabled}
     minDateTime={toDayjs(minDate) ?? undefined}
     maxDateTime={toDayjs(maxDate) ?? undefined}
-    slots={{ textField: TextField }}
-    slotProps={textFieldSlot(className)}
+    slotProps={fieldSlotProps(className)}
   />
 );
