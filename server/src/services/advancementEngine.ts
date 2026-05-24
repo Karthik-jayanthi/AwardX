@@ -522,6 +522,9 @@ export async function executeAdvancement(
     }
 
     // Update round_submissions statuses
+    const roundType = String(round.type || '').toLowerCase();
+    const isShortlistingRound = roundType === 'shortlisting';
+
     for (const subId of advancingSet) {
       const { error: advanceError } = await supabase
         .from('round_submissions')
@@ -531,6 +534,13 @@ export async function executeAdvancement(
       if (advanceError) {
         await releaseFinalizeLock();
         return { ok: false, error: advanceError.message || 'Failed to update advanced participants' };
+      }
+
+      if (isShortlistingRound) {
+        await supabase
+          .from('submissions')
+          .update({ status: 'shortlisted' })
+          .eq('id', subId);
       }
     }
 

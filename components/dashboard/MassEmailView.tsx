@@ -33,38 +33,7 @@ import { Program } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
 import { sendMassEmail } from '../../services/email';
 import { SkeletonLoader } from '../SkeletonLoader';
-import { auth } from '../../services/supabase';
-
-const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim().replace(/\/$/, '');
-
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-async function fetchRounds(programId: string) {
-  const { session } = await auth.getSession();
-  const token = session?.access_token;
-  const resp = await fetch(`${envBackendUrl}/api/schedule-rounds/${programId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}));
-    throw new Error(body.error || `Rounds API returned ${resp.status}`);
-  }
-  return resp.json();
-}
-
-async function fetchSegments(programId: string, roundId: string) {
-  const { session } = await auth.getSession();
-  const token = session?.access_token;
-  const resp = await fetch(
-    `${envBackendUrl}/api/mass-email/${programId}/rounds/${roundId}/segments`,
-    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
-  );
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}));
-    throw new Error(body.error || `Segments API returned ${resp.status}`);
-  }
-  return resp.json();
-}
+import { fetchBackendJson } from '../../services/backendApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,6 +51,30 @@ interface SegmentData {
   round: { id: string; title: string; type: string; status: string };
   segments: { winners: Recipient[]; eliminated: Recipient[]; active: Recipient[] };
   counts: { winners: number; eliminated: number; active: number; total: number };
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+
+type RoundsApiResponse = {
+  data?: Array<{ id: string; title: string; status: string }>;
+  rounds?: Array<{ id: string; title: string; status: string }>;
+};
+
+async function fetchRounds(programId: string): Promise<RoundsApiResponse> {
+  return fetchBackendJson<RoundsApiResponse>(`/api/schedule-rounds/${programId}`, {
+    requireAuth: true,
+    errorPrefix: 'Rounds API',
+  });
+}
+
+async function fetchSegments(programId: string, roundId: string): Promise<{ data: SegmentData }> {
+  return fetchBackendJson<{ data: SegmentData }>(
+    `/api/mass-email/${programId}/rounds/${roundId}/segments`,
+    {
+      requireAuth: true,
+      errorPrefix: 'Segments API',
+    },
+  );
 }
 
 interface SendResult {

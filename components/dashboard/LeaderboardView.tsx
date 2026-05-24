@@ -17,27 +17,22 @@ import { Trophy, Star, Heart, RefreshCw, ChevronDown, ChevronUp, AlertCircle } f
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Program } from '../../services/models';
 import { queryKeys } from '../../services/queryKeys';
+import { fetchBackendJson } from '../../services/backendApi';
 
-const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim().replace(/\/$/, '');
+type LeaderboardApiResponse<T> = { data?: T };
 
 async function fetchLeaderboard(programId: string) {
-  const url = `${envBackendUrl}/api/leaderboard/${programId}`;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}));
-    throw new Error(body.error || `Leaderboard API returned ${resp.status}`);
-  }
-  return resp.json();
+  return fetchBackendJson<LeaderboardApiResponse<{ rounds?: RoundTab[] }>>(
+    `/api/leaderboard/${programId}`,
+    { errorPrefix: 'Leaderboard API' },
+  );
 }
 
 async function fetchRoundLeaderboard(roundId: string) {
-  const url = `${envBackendUrl}/api/leaderboard/rounds/${roundId}`;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}));
-    throw new Error(body.error || `Leaderboard API returned ${resp.status}`);
-  }
-  return resp.json();
+  return fetchBackendJson<LeaderboardApiResponse<{ round?: { title: string }; entries?: LeaderboardEntry[] }>>(
+    `/api/leaderboard/rounds/${roundId}`,
+    { errorPrefix: 'Leaderboard API' },
+  );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────

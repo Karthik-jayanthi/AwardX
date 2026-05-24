@@ -83,9 +83,24 @@ npm install
 
 ## Step 5: Run the Application
 
+Start the frontend and Express API together:
+
 ```bash
-npm run dev
+npm run dev:all
 ```
+
+(`npm run dev` is an alias for the same command.)
+
+This runs Vite on `http://localhost:3000` and the backend on `http://localhost:5001` (Vite proxies `/api/*` to the backend).
+
+- Frontend only: `npm run dev:client`
+- Backend only: `npm run dev:server`
+
+**Local env tips**
+
+- Leave `VITE_BACKEND_URL` empty in development so requests use the Vite proxy.
+- Set `PORT=5001` in `server/.env` (port 5000 is often used by macOS AirPlay).
+- Match `VITE_BACKEND_PROXY_TARGET` to your backend `PORT` if you change it.
 
 The application will be available at `http://localhost:3000`
 
@@ -125,7 +140,8 @@ RLS is enabled on all sensitive tables. Basic policies are included, but you sho
 8. Health check endpoint for uptime monitoring is `/api/health`
 9. Configure GitHub secret `UPTIME_BASE_URL` to enable scheduled checks in `.github/workflows/uptime-monitor.yml`
 10. Set `VITE_SENTRY_DSN` in production environment variables to enable frontend error monitoring
-5. Configure additional OAuth providers (GitHub, LinkedIn) if needed
+11. Deploy the Express server (`server/`) for overview/public pages, or set `VITE_BACKEND_URL` to that host in production
+12. Configure additional OAuth providers (GitHub, LinkedIn) if needed
 
 ## Troubleshooting
 

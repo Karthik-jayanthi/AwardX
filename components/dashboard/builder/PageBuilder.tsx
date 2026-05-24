@@ -3,7 +3,8 @@ import { programPages, programs, storage } from '../../../services/supabase';
 import { db } from '../../../services/database';
 import { Save, Rocket, Check, X, Info, ExternalLink } from 'lucide-react';
 import { Button } from '../../Button';
-import { getProgramMediaAssets } from '../../../services/overviewApi';
+import { getProgramMediaAssets, invalidateOverviewCache } from '../../../services/overviewApi';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ const Label: React.FC<{ children: React.ReactNode; hint?: string; required?: boo
 // ─── PageBuilder ─────────────────────────────────────────────────────────────
 
 export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -123,10 +125,11 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
     }, [programId]);
 
     useEffect(() => {
+        if (authLoading || !isAuthenticated) return;
         getProgramMediaAssets(programId)
             .then(assets => setMediaAssets((assets || []).filter((a: any) => !!a?.url)))
-            .catch(() => {});
-    }, [programId]);
+            .catch((err) => console.warn('PageBuilder: failed to load media assets', err));
+    }, [programId, isAuthenticated, authLoading]);
 
     // ── Save ──────────────────────────────────────────────────────────────────
     const buildSections = () => {
@@ -170,6 +173,10 @@ export const PageBuilder: React.FC<PageBuilderProps> = ({ programId }) => {
         }
         setConfig(updatedConfig || basePayload);
         if (publish) setIsPublished(true);
+
+        void invalidateOverviewCache(programId).catch((err) => {
+            console.warn('PageBuilder: failed to invalidate public overview cache', err);
+        });
     };
 
     const handleSave = async () => {

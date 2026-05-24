@@ -68,6 +68,9 @@ export interface Round {
   startCondition: StartCondition;
   endCondition: EndCondition;
   shortlistConfig: ShortlistConfig;
+  advancementCriteria?: AdvancementCriteria;
+  advancementTrigger?: AdvancementTrigger;
+  isFinalized?: boolean;
   order: number; // For tile view ordering (visual only)
   status: 'draft' | 'scheduled' | 'active' | 'completed' | 'cancelled';
   createdAt: string;

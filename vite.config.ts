@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => {
       envDir = path.resolve(__dirname, 'env');
     }
 
+    const backendProxyTarget = process.env.VITE_BACKEND_PROXY_TARGET || 'http://localhost:5001';
+
     return {
       envDir,
       server: {
@@ -24,7 +26,7 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         proxy: {
           '/api': {
-            target: 'http://localhost:5000',
+            target: backendProxyTarget,
             changeOrigin: true,
           },
         },

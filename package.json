@@ -55,6 +55,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/coverage-v8": "^4.1.2",
     "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
     "jsdom": "^29.0.1",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
@@ -63,10 +64,13 @@
     "vitest": "^4.1.2"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run dev:all",
+    "dev:all": "concurrently -n client,server -c blue,green \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "vite",
+    "dev:server": "npm --prefix server run dev",
+    "dev:full": "npm run dev:all",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:all": "vercel dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",

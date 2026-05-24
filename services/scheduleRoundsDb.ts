@@ -1,5 +1,12 @@
 import { rounds as supabaseRounds, roundEdges as supabaseRoundEdges, supabase } from './supabase';
-import { Round, RoundEdge, EdgeCondition } from '../types/scheduleRounds';
+import {
+  AdvancementCriteria,
+  AdvancementTrigger,
+  Round,
+  RoundEdge,
+  EdgeCondition,
+} from '../types/scheduleRounds';
+import { criteriaToShortlistConfig, shortlistConfigToCriteria } from '../lib/roundScheduleUtils';
 
 // Convert database round to scheduleRounds Round type
 export function dbRoundToScheduleRound(dbRound: any): Round {
@@ -25,12 +32,13 @@ export function dbRoundToScheduleRound(dbRound: any): Round {
     blindEvaluation: settings.blindEvaluation ?? false,
     startCondition: settings.startCondition || { type: 'manual_trigger' },
     endCondition: settings.endCondition || { type: 'manual_close' },
-    shortlistConfig: settings.shortlistConfig || {
-      enabled: false,
-      method: 'percentage',
-      value: 50,
-      visibility: ['admin'],
-    },
+    shortlistConfig: settings.shortlistConfig || criteriaToShortlistConfig(dbRound.advancement_criteria),
+    advancementCriteria: (dbRound.advancement_criteria as AdvancementCriteria) || shortlistConfigToCriteria(
+      settings.shortlistConfig || criteriaToShortlistConfig(null),
+      settings.type || dbRound.type,
+    ),
+    advancementTrigger: (dbRound.advancement_trigger as AdvancementTrigger) || 'manual',
+    isFinalized: Boolean(dbRound.is_finalized),
     order: dbRound.sort_order ?? settings.order ?? 0,
     status: mapStatusToScheduleRound(dbRound.status),
     createdAt: dbRound.created_at || new Date().toISOString(),
@@ -53,8 +61,13 @@ export function scheduleRoundToDbRound(round: Round): {
   end_date: string;
   status: string;
   sort_order: number;
+  advancement_criteria: AdvancementCriteria;
+  advancement_trigger: AdvancementTrigger;
   settings: any;
 } {
+  const advancementCriteria =
+    round.advancementCriteria || shortlistConfigToCriteria(round.shortlistConfig, round.type);
+  const advancementTrigger = round.advancementTrigger || 'manual';
   // Extract fixed dates if available
   let startDate = new Date().toISOString();
   let endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // Default: 7 days from now
@@ -76,6 +89,8 @@ export function scheduleRoundToDbRound(round: Round): {
     end_date: endDate,
     status: mapStatusToDb(round.status),
     sort_order: round.order,
+    advancement_criteria: advancementCriteria,
+    advancement_trigger: advancementTrigger,
     settings: {
       name: round.name,
       type: round.type,
@@ -86,6 +101,8 @@ export function scheduleRoundToDbRound(round: Round): {
       startCondition: round.startCondition,
       endCondition: round.endCondition,
       shortlistConfig: round.shortlistConfig,
+      advancementCriteria,
+      advancementTrigger,
       updatedAt: round.updatedAt,
       version: round.version,
       metadata: round.metadata,
@@ -218,6 +235,8 @@ export const scheduleRoundsService = {
         end_date: dbRound.end_date,
         status: dbRound.status,
         sort_order: dbRound.sort_order,
+        advancement_criteria: dbRound.advancement_criteria,
+        advancement_trigger: dbRound.advancement_trigger,
         settings: dbRound.settings,
       })
       .select()
@@ -253,6 +272,8 @@ export const scheduleRoundsService = {
         end_date: dbRound.end_date,
         status: dbRound.status,
         sort_order: dbRound.sort_order,
+        advancement_criteria: dbRound.advancement_criteria,
+        advancement_trigger: dbRound.advancement_trigger,
         settings: dbRound.settings,
       })
       .eq('id', round.id)

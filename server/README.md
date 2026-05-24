@@ -30,7 +30,7 @@ Required environment variables:
 - `SUPABASE_URL` - Your Supabase project URL
 - `SUPABASE_ANON_KEY` - Your Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key (admin access)
-- `PORT` - Server port (default: 5000)
+- `PORT` - Server port (default: 5001; avoid 5000 on macOS — often used by AirPlay)
 - `FRONTEND_URL` - Your frontend URL for CORS (default: http://localhost:3000)
 
 Optional Redis caching variables:
@@ -46,7 +46,7 @@ Optional Redis caching variables:
 npm run dev
 ```
 
-The server will start on `http://localhost:5000`
+The server will start on `http://localhost:5001`
 
 ### 4. Build for Production
 
@@ -83,7 +83,11 @@ npm start
 - `GET /api/programs/:id/stats` - Get program statistics
 
 ### Overview Page
+- `GET /api/overview/public/by-slug/:slug` - Public published page by program slug (no auth)
+- `GET /api/overview/public/:programId` - Public published page by program ID (no auth)
 - `GET /api/overview/:programId` - Get full overview page payload (config, sections, sponsors, faqs, timeline)
+- `GET /api/overview/:programId/media` - List program page media assets (auth + program access)
+- `POST /api/overview/:programId/invalidate-cache` - Clear overview/public cache after publish (auth + program access)
 - `PUT /api/overview/:programId/config` - Upsert page config
 - `POST /api/overview/:programId/sections` - Upsert section
 - `DELETE /api/overview/:programId/sections/:id` - Delete section
@@ -144,7 +148,7 @@ server/
 
 ## Security Features
 
-- **Rate Limiting**: 100 requests per 15 minutes per IP
+- **Rate Limiting**: In-memory limits on invite routes (not global)
 - **CORS**: Restricted to frontend URL only
 - **JWT Validation**: All protected routes require valid JWT token
 - **Environment Isolation**: Database credentials never exposed to frontend

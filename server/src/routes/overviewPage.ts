@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { requireProgramAccess } from '../middleware/programAccess.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
@@ -7,6 +8,18 @@ const router = Router();
 
 async function invalidateOverview(programId: string) {
   await deleteCache(cacheKeys.programOverview(programId));
+  await deleteCache(`public:overview:${programId}`);
+
+  const supabase = getSupabaseAdmin();
+  const { data: program } = await supabase
+    .from('programs')
+    .select('slug')
+    .eq('id', programId)
+    .maybeSingle();
+
+  if (program?.slug) {
+    await deleteCache(`public:overview:slug:${program.slug}`);
+  }
 }
 
 async function getOverviewPayload(programId: string) {
@@ -24,6 +37,7 @@ async function getOverviewPayload(programId: string) {
   ]);
 
   if (programResult.error) throw new Error(programResult.error.message || 'Failed to fetch program');
+  if (configResult.error) throw new Error(configResult.error.message || 'Failed to fetch page config');
   if (sectionsResult.error) throw new Error(sectionsResult.error.message || 'Failed to fetch page sections');
 
   // Optional queries — degrade gracefully if table is missing or errors
@@ -143,6 +157,25 @@ router.get('/public/:programId', async (req, res) => {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
 });
+
+router.post(
+  '/:programId/invalidate-cache',
+  requireAuth,
+  requireProgramAccess('programId'),
+  async (req, res) => {
+    const { programId } = req.params;
+    if (!programId) {
+      return res.status(400).json({ error: 'programId is required' });
+    }
+
+    try {
+      await invalidateOverview(programId);
+      return res.json({ ok: true });
+    } catch (error: any) {
+      return res.status(500).json({ error: error?.message || 'Failed to invalidate cache' });
+    }
+  },
+);
 
 router.get('/:programId', requireAuth, async (req, res) => {
   const { programId } = req.params;
@@ -453,7 +486,7 @@ router.delete('/:programId/timeline/:id', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/:programId/media', requireAuth, async (req, res) => {
+router.get('/:programId/media', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });

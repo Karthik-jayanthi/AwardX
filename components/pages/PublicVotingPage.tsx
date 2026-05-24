@@ -18,11 +18,11 @@ import { SkeletonLoader } from '../SkeletonLoader';
 import { EmptyState } from '../EmptyState';
 import { queryKeys } from '../../services/queryKeys';
 import { resolveMediaPublicUrl } from '../../services/supabase';
-
-const envBackendUrl = (import.meta.env.VITE_BACKEND_URL || '').trim().replace(/\/$/, '');
+import { resolveBackendPath } from '../../services/backendApi';
 
 function apiUrl(path: string) {
-  return `${envBackendUrl}/api${path}`;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return resolveBackendPath(`/api${normalized}`);
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
