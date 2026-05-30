@@ -621,7 +621,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           const loadedPerms = Object.values(PERMISSIONS).filter(p => databaseService.hasPermission(p));
           setUserPermissions(loadedPerms);
         } catch {
-          setUserPermissions(Object.values(PERMISSIONS));
+          setUserPermissions([]);
         }
         const realUser = await databaseService.getCurrentUser();
         if (realUser) {

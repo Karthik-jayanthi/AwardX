@@ -17,10 +17,12 @@ import {
   votingConfigs,
   advancement,
   resolveMediaPublicUrl,
+  setActiveOrganization as setSupabaseActiveOrganization,
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { fetchBackendJson } from './backendApi';
-import { Program, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
+import { Program, Organization, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember } from './models';
+import { normalizeIntegrationSources } from '../lib/programIntegrations';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
 
 export interface PaginatedResult<T> {
@@ -444,6 +446,7 @@ class DatabaseService {
   private currentProgramId: string | null = null;
   private cachedPermissions: Set<string> | null = null;
   private cachedRoleName: string | null = null;
+  private permissionsLoaded = false;
 
   private async safeAuditLog(event: {
     action: string;
@@ -471,44 +474,25 @@ class DatabaseService {
   // Initialize and get current organization
   async initialize() {
     try {
-      // First try to get existing organization
+      const { user } = await auth.getUser();
+      if (user) {
+        const { data: ws } = await workspaceState.get(user.id);
+        const savedOrgId = (ws?.preferences as Record<string, unknown> | undefined)?.active_organization_id;
+        if (typeof savedOrgId === 'string' && savedOrgId) {
+          const userOrgs = await this.getUserOrganizations();
+          const savedOrg = userOrgs.find((org) => org.id === savedOrgId);
+          if (savedOrg) {
+            await this.setActiveOrganization(savedOrg.id);
+            return { org: savedOrg, error: null };
+          }
+        }
+      }
+
       const { data: org, error } = await organizations.getCurrent();
       if (org && org.id) {
         this.currentOrgId = org.id;
         await this.refreshPermissionCache();
         return { org, error: null };
-      }
-
-      // If no org exists, try to create a default one for the user
-      if (!org && !error) {
-        const { user } = await auth.getUser();
-        if (user) {
-          // Try to create a default organization
-          const email = user.email || 'user';
-          const baseName = user.user_metadata?.full_name || email.split('@')[0] || 'My Organization';
-          const orgName = baseName.trim() || 'My Organization';
-
-          // Generate a unique slug
-          let baseSlug = orgName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-          if (!baseSlug) baseSlug = 'my-organization';
-
-          // Add timestamp to make slug unique if needed
-          const orgSlug = `${baseSlug}-${Date.now()}`;
-
-          const { data: newOrg, error: createError } = await organizations.create(orgName, orgSlug);
-          if (newOrg && !createError) {
-            this.currentOrgId = newOrg.id;
-            return { org: newOrg, error: null };
-          } else if (createError) {
-            // If creation failed due to conflict, try to get existing org
-            console.warn('Organization creation failed, trying to get existing:', createError);
-            const { data: existingOrg } = await organizations.getCurrent();
-            if (existingOrg && existingOrg.id) {
-              this.currentOrgId = existingOrg.id;
-              return { org: existingOrg, error: null };
-            }
-          }
-        }
       }
 
       return { org, error };
@@ -518,6 +502,76 @@ class DatabaseService {
     }
   }
 
+  private mapOrganization(raw: any): Organization {
+    return {
+      id: raw.id,
+      name: raw.name,
+      slug: raw.slug,
+      logoUrl: raw.logo_url || undefined,
+      website: raw.website || undefined,
+      industry: raw.industry || undefined,
+      plan: raw.plan || undefined,
+      eventCount: raw.programs?.[0]?.count ?? raw.eventCount ?? 0,
+      createdAt: raw.created_at || undefined,
+    };
+  }
+
+  async getUserOrganizations(): Promise<Organization[]> {
+    const { data, error } = await organizations.listForUser();
+    if (error || !data) return [];
+    return data.map((org: any) => this.mapOrganization(org));
+  }
+
+  async getCurrentOrganization(): Promise<Organization | null> {
+    if (!this.currentOrgId) {
+      await this.initialize();
+    }
+    if (!this.currentOrgId) return null;
+
+    const orgs = await this.getUserOrganizations();
+    return orgs.find((org) => org.id === this.currentOrgId) || null;
+  }
+
+  async setActiveOrganization(orgId: string) {
+    this.currentOrgId = orgId;
+    setSupabaseActiveOrganization(orgId);
+    this.currentProgramId = null;
+    await this.refreshPermissionCache();
+
+    const { user } = await auth.getUser();
+    if (user) {
+      const { data: ws } = await workspaceState.get(user.id);
+      const existingPrefs = (ws?.preferences as Record<string, unknown> | undefined) || {};
+      await workspaceState.save(user.id, {
+        preferences: {
+          ...existingPrefs,
+          active_organization_id: orgId,
+        },
+        active_program_id: null,
+      });
+    }
+  }
+
+  async createOrganization(name: string): Promise<Organization> {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('Organization name is required');
+    }
+
+    let baseSlug = trimmedName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    if (!baseSlug) baseSlug = 'organization';
+    const orgSlug = `${baseSlug}-${Date.now()}`;
+
+    const { data, error } = await organizations.create(trimmedName, orgSlug);
+    if (error || !data) {
+      throw new Error(error?.message || 'Failed to create organization');
+    }
+
+    const created = this.mapOrganization(data);
+    await this.setActiveOrganization(created.id);
+    return created;
+  }
+
   getCurrentOrgId(): string | null {
     return this.currentOrgId;
   }
@@ -525,6 +579,7 @@ class DatabaseService {
   // Refresh organization cache
   async refreshOrgCache() {
     this.currentOrgId = null;
+    setSupabaseActiveOrganization(null);
     const { data: org } = await organizations.getCurrent();
     if (org?.id) {
       this.currentOrgId = org.id;
@@ -540,6 +595,7 @@ class DatabaseService {
   private async refreshPermissionCache() {
     this.cachedPermissions = null;
     this.cachedRoleName = null;
+    this.permissionsLoaded = false;
     if (!supabase) return;
 
     const { user } = await auth.getUser();
@@ -549,7 +605,23 @@ class DatabaseService {
       const { data: org } = await organizations.getCurrent();
       if (org?.id) this.currentOrgId = org.id;
     }
-    if (!this.currentOrgId) return;
+    if (!this.currentOrgId) {
+      this.permissionsLoaded = true;
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profile?.organization_id === this.currentOrgId) {
+      this.cachedRoleName = 'owner';
+      this.cachedPermissions = new Set(['all']);
+      this.permissionsLoaded = true;
+      return;
+    }
 
     // Find membership
     let memberQuery = supabase
@@ -562,7 +634,10 @@ class DatabaseService {
     }
     const { data: member } = await memberQuery.maybeSingle();
 
-    if (!member?.role_id) return;
+    if (!member?.role_id) {
+      this.permissionsLoaded = true;
+      return;
+    }
 
     // Fetch role permissions keys
     const { data: roleRow } = await supabase
@@ -576,6 +651,11 @@ class DatabaseService {
 
     this.cachedRoleName = (roleRow as any)?.name || null;
     this.cachedPermissions = new Set(permKeys);
+    this.permissionsLoaded = true;
+  }
+
+  arePermissionsLoaded(): boolean {
+    return this.permissionsLoaded;
   }
 
   private async requireProgramManageAccess(): Promise<void> {
@@ -636,6 +716,7 @@ class DatabaseService {
       visibility: program.visibility ? (program.visibility.charAt(0).toUpperCase() + program.visibility.slice(1)) as 'Public' | 'Private' : 'Public',
       timezone: program.timezone || 'UTC',
       activeFormId: program.active_form_id ?? null,
+      integrationSources: normalizeIntegrationSources(program.integration_sources),
     };
   }
 
@@ -1562,6 +1643,8 @@ class DatabaseService {
         lastActive: profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '—',
         avatar: resolveMediaPublicUrl(profile.avatar_url),
         joinedDate: m.joined_at ? new Date(m.joined_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        programScope: m.program_id ? 'program' : 'organization',
+        programId: m.program_id || null,
       };
     });
   }
@@ -2762,6 +2845,28 @@ class DatabaseService {
     });
   }
 
+  async setProgramIntegrationSources(
+    programId: string,
+    patch: Partial<{ resend: string | null; didit: string | null; payment: string | null }>,
+  ) {
+    await fetchBackendJson<{ data: { integration_sources: Record<string, string | null> } }>(
+      `/api/integrations/program/${encodeURIComponent(programId)}/sources`,
+      {
+        method: 'PUT',
+        requireAuth: true,
+        errorPrefix: 'Integrations API',
+        body: { integration_sources: patch },
+      },
+    );
+    await this.safeAuditLog({
+      action: 'Updated integration inheritance',
+      actionType: 'update',
+      resourceType: 'program',
+      resourceId: programId,
+      metadata: { patch },
+    });
+  }
+
   // ========================================================================
   // ROUND SUBMISSIONS — Query helpers
   // ========================================================================
@@ -2803,18 +2908,11 @@ class DatabaseService {
   }
 
   hasPermission(permission: string): boolean {
-    // Fail-open so the UI doesn't go blank if permissions haven't been seeded/configured yet.
-    // Once permissions are present, this will correctly enforce them.
     const roleName = (this.cachedRoleName || '').toLowerCase();
     if (roleName === 'admin' || roleName === 'owner' || roleName === 'superadmin') return true;
 
-    // If we haven't loaded permissions (or user isn't in organization_members yet),
-    // don't hard-block navigation.
-    if (!this.cachedPermissions) return true;
-
-    // If permissions exist but are empty (common right after schema setup),
-    // allow access until permissions are assigned.
-    if (this.cachedPermissions.size === 0) return true;
+    // Deny until membership permissions are resolved (fail-closed).
+    if (!this.permissionsLoaded || !this.cachedPermissions) return false;
 
     if (this.cachedPermissions.has('all')) return true;
     return this.cachedPermissions.has(permission);

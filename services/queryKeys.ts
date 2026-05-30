@@ -45,6 +45,7 @@ export const queryKeys = {
   },
   forms: {
     byProgram: (programId: string) => ['forms', programId] as const,
+    fields: (formId: string) => ['forms', 'fields', formId] as const,
   },
   roundSubmissions: {
     byRound: (roundId: string) => ['round-submissions', roundId] as const,

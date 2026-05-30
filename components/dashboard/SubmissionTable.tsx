@@ -60,6 +60,41 @@ interface SubmissionTableProps {
    onNavigate?: (view: string) => void;
 }
 
+type FormFieldColumn = {
+   id: string;
+   label: string;
+   type: string;
+};
+
+const getSubmissionResponses = (sub: Submission): Record<string, unknown> => {
+   const data = sub.submissionData || {};
+   if (data.responses && typeof data.responses === 'object') {
+      return data.responses as Record<string, unknown>;
+   }
+   return data as Record<string, unknown>;
+};
+
+const formatSubmissionFieldValue = (value: unknown): string => {
+   if (value == null || value === '') return '—';
+   if (Array.isArray(value)) return value.join(', ');
+   if (typeof value === 'object') return JSON.stringify(value);
+   return String(value);
+};
+
+const DISPLAY_FIELD_TYPES = new Set([
+   'text',
+   'textarea',
+   'email',
+   'phone',
+   'number',
+   'select',
+   'radio',
+   'checkbox',
+   'url',
+   'date',
+   'award_selector',
+]);
+
 export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, onNavigate }) => {
    const queryClient = useQueryClient();
    const { confirm, ConfirmDialogNode } = useConfirm();
@@ -113,10 +148,30 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const formSetup = getProgramFormSetupState(forms, activeFormId);
    const canViewSubmissions = formSetup.status === 'ready';
 
+   const formFieldsQuery = useQuery({
+      queryKey: queryKeys.forms.fields(activeFormId ?? ''),
+      queryFn: () => db.getFormFields(activeFormId!),
+      enabled: !!activeFormId,
+      staleTime: 30_000,
+   });
+
+   const responseColumns = useMemo<FormFieldColumn[]>(() => {
+      const fields = (formFieldsQuery.data || []) as Array<{ id: string; label: string; type: string }>;
+      return fields
+         .filter((field) => DISPLAY_FIELD_TYPES.has(field.type))
+         .slice(0, 4)
+         .map((field) => ({
+            id: field.id,
+            label: field.label,
+            type: field.type,
+         }));
+   }, [formFieldsQuery.data]);
+
    const submissionsQuery = useQuery({
       queryKey: queryKeys.submissions.paginated(activeEvent?.id ?? 'all', page, debouncedSearch),
       queryFn: () => db.getSubmissionsPaginated({
          programId: activeEvent?.id,
+         formId: activeFormId,
          page,
          pageSize,
          search: debouncedSearch,
@@ -157,6 +212,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const judges = judgesQuery.data || [];
    const total = submissionsQuery.data?.total || 0;
    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+   const tableColumnCount = 8 + responseColumns.length;
    const isLoading = submissionsQuery.isLoading || judgesQuery.isLoading;
    const isSearching = debouncedSearch.length > 0;
 
@@ -343,6 +399,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
    const handleExportCsv = async () => {
       const exported = await db.getSubmissionsPaginated({
          programId: activeEvent?.id,
+         formId: activeFormId,
          page: 1,
          pageSize: 1000,
          search: debouncedSearch,
@@ -352,17 +409,25 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
          return;
       }
 
-      const header = ['id', 'title', 'applicant', 'category', 'status', 'score', 'date', 'votes'];
-      const rows = exported.items.map((item) => [
-         item.id,
-         item.title,
-         item.applicant,
-         item.category,
-         item.status,
-         item.score ?? '',
-         item.date,
-         item.votes ?? 0,
-      ]);
+      const header = [
+         'applicant',
+         'category',
+         'status',
+         'score',
+         'date',
+         ...responseColumns.map((column) => column.label),
+      ];
+      const rows = exported.items.map((item) => {
+         const responses = getSubmissionResponses(item);
+         return [
+            item.applicant,
+            item.category,
+            item.status,
+            item.score ?? '',
+            item.date,
+            ...responseColumns.map((column) => formatSubmissionFieldValue(responses[column.id])),
+         ];
+      });
 
       const csv = [header, ...rows]
          .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
@@ -421,7 +486,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
          {canViewSubmissions && formSetup.activeForm && (
             <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
                <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">Active submission form</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">Submission form</p>
                   <p className="truncate text-sm font-semibold text-slate-800">{formSetup.activeForm.title || 'Untitled form'}</p>
                </div>
                <button
@@ -429,7 +494,7 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                   onClick={() => onNavigate?.('templates')}
                   className="shrink-0 text-xs font-semibold text-indigo-700 hover:text-indigo-900"
                >
-                  Change form
+                  Edit form
                </button>
             </div>
          )}
@@ -548,8 +613,10 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               />
                            </div>
                         </th>
-                        <th className="p-5 w-20">ID</th>
                         <th className="p-5">Submission</th>
+                        {responseColumns.map((column) => (
+                           <th key={column.id} className="p-5">{column.label}</th>
+                        ))}
                         <th className="p-5">Category</th>
                         <th className="p-5">Status</th>
                         <th className="p-5">Judges</th>
@@ -561,12 +628,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                   <tbody className="divide-y divide-slate-50">
                      {isLoading && (
                         <tr>
-                           <td colSpan={9}>
-                              <TableSkeleton rows={6} columns={9} />
+                           <td colSpan={tableColumnCount}>
+                              <TableSkeleton rows={6} columns={tableColumnCount} />
                            </td>
                         </tr>
                      )}
-                     {!isLoading && submissions.map((sub) => (
+                     {!isLoading && submissions.map((sub) => {
+                        const responses = getSubmissionResponses(sub);
+                        return (
                         <tr
                            key={sub.id}
                            className={`group border-b border-slate-50 transition-all hover:bg-slate-50/70 ${selectedIds.includes(sub.id) ? 'bg-indigo-50/50' : ''}`}
@@ -580,11 +649,6 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                     onChange={() => toggleSelection(sub.id)}
                                  />
                               </div>
-                           </td>
-                           <td className="p-5">
-                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs font-semibold text-slate-500">
-                                 {sub.id.split('-')[1]}
-                              </span>
                            </td>
                            <td className="p-5">
                               <div className="flex items-center gap-4">
@@ -609,6 +673,11 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                  </div>
                               </div>
                            </td>
+                           {responseColumns.map((column) => (
+                              <td key={column.id} className="p-5 text-sm text-slate-700 max-w-[220px] truncate">
+                                 {formatSubmissionFieldValue(responses[column.id])}
+                              </td>
+                           ))}
                            <td className="p-5">
                               <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm shadow-slate-50">
                                  {sub.category}
@@ -693,10 +762,11 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               </div>
                            </td>
                         </tr>
-                     ))}
+                        );
+                     })}
                      {!isLoading && submissions.length === 0 && (
                         <tr>
-                           <td colSpan={9} className="p-20 text-center">
+                           <td colSpan={tableColumnCount} className="p-20 text-center">
                               <div className="max-w-xs mx-auto space-y-4">
                                  <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center mx-auto text-slate-300">
                                     <Search className="w-8 h-8" />

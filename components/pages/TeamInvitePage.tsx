@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, Mail, UserPlus, XCircle } from 'lucide-react';
 import { auth } from '../../services/supabase';
+import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
 
 type InviteContext = {
   organizationId?: string;
@@ -128,7 +129,7 @@ export const TeamInvitePage: React.FC = () => {
       const accessToken = session?.access_token;
 
       if (!accessToken) {
-        sessionStorage.setItem('postAuthRedirect', nextPath);
+        storePostAuthRedirect(nextPath);
         navigate(`/login?next=${encodeURIComponent(nextPath)}`);
         return;
       }
@@ -160,10 +161,8 @@ export const TeamInvitePage: React.FC = () => {
   React.useEffect(() => {
     if (!token) return;
 
-    const redirectTarget = sessionStorage.getItem('postAuthRedirect');
+    const redirectTarget = consumePostAuthRedirect('');
     if (redirectTarget !== nextPath) return;
-
-    sessionStorage.removeItem('postAuthRedirect');
     void acceptInvite();
   }, [acceptInvite, nextPath, token]);
 
@@ -228,7 +227,7 @@ export const TeamInvitePage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  sessionStorage.setItem('postAuthRedirect', nextPath);
+                  storePostAuthRedirect(nextPath);
                   navigate(`/login?next=${encodeURIComponent(nextPath)}`);
                 }}
                 className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
@@ -237,7 +236,7 @@ export const TeamInvitePage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  sessionStorage.setItem('postAuthRedirect', nextPath);
+                  storePostAuthRedirect(nextPath);
                   navigate(`/signup?next=${encodeURIComponent(nextPath)}`);
                 }}
                 className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"

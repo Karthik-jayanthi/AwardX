@@ -14,7 +14,15 @@ import {
   type IntegrationStatus,
   type ResendDomain,
 } from '../../services/integrations';
+import { db } from '../../services/database';
+import type { IntegrationProvider } from '../../lib/programIntegrations';
 import { CheckCircle2, ExternalLink, Loader2, Mail, ShieldCheck, X } from 'lucide-react';
+
+type IntegrationSourcesState = {
+  resend: string;
+  didit: string;
+  payment: string;
+};
 
 type ConnectTarget = 'razorpay' | 'resend' | 'didit' | null;
 type ResendStep = 'login' | 'bootstrap' | 'project' | 'sender';
@@ -60,6 +68,12 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
   const [diditApiKey, setDiditApiKey] = useState('');
   const [diditApiBaseUrl, setDiditApiBaseUrl] = useState('https://verification.didit.me');
   const [diditWebhookSecret, setDiditWebhookSecret] = useState('');
+  const [integrationSources, setIntegrationSources] = useState<IntegrationSourcesState>({
+    resend: '',
+    didit: '',
+    payment: '',
+  });
+  const [savingIntegrationSource, setSavingIntegrationSource] = useState<IntegrationProvider | null>(null);
 
   const selectedProgram = useMemo(
     () => programs.find((p) => p.id === selectedProgramId),
@@ -71,10 +85,11 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
     return config?.provider === 'Razorpay' && !!config.connected && !!config.publicKey;
   }, [selectedProgram]);
 
-  const refreshStatus = async () => {
+  const refreshStatus = async (programId?: string) => {
     setStatusLoading(true);
     try {
-      const status = await getIntegrationStatus();
+      const targetProgramId = programId || selectedProgramId || undefined;
+      const status = await getIntegrationStatus(targetProgramId);
       setIntegrationStatus(status);
     } catch (e: any) {
       onError(e?.message || 'Failed to load integration status');
@@ -86,6 +101,17 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
   useEffect(() => {
     void refreshStatus();
   }, []);
+
+  useEffect(() => {
+    if (!selectedProgramId) return;
+    const program = programs.find((p) => p.id === selectedProgramId);
+    setIntegrationSources({
+      resend: program?.integrationSources?.resend || '',
+      didit: program?.integrationSources?.didit || '',
+      payment: program?.integrationSources?.payment || '',
+    });
+    void refreshStatus(selectedProgramId);
+  }, [selectedProgramId, programs]);
 
   useEffect(() => {
     setRazorpayProgramId(selectedProgramId);
@@ -266,11 +292,62 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
     }
   };
 
-  const resendConnected =
-    integrationStatus?.resend?.connected && integrationStatus?.resend?.source === 'organization';
+  const resendConnected = !!integrationStatus?.resend?.connected;
 
-  const diditConnected =
-    integrationStatus?.didit?.connected && integrationStatus?.didit?.source === 'organization';
+  const diditConnected = !!integrationStatus?.didit?.connected;
+
+  const inheritanceOptions = useMemo(
+    () =>
+      programs
+        .filter((program) => program.id !== selectedProgramId)
+        .map((program) => ({ id: program.id, title: program.title })),
+    [programs, selectedProgramId],
+  );
+
+  const handleIntegrationInheritanceChange = async (
+    provider: IntegrationProvider,
+    nextSourceProgramId: string,
+  ) => {
+    if (!selectedProgramId) return;
+
+    setIntegrationSources((prev) => ({ ...prev, [provider]: nextSourceProgramId }));
+    setSavingIntegrationSource(provider);
+    onError(null);
+
+    try {
+      await db.setProgramIntegrationSources(selectedProgramId, {
+        [provider]: nextSourceProgramId || null,
+      });
+      await onProgramsUpdated?.();
+      await refreshStatus(selectedProgramId);
+      onSuccess(
+        nextSourceProgramId
+          ? `${provider.charAt(0).toUpperCase()}${provider.slice(1)} will use the setup from the selected event.`
+          : `${provider.charAt(0).toUpperCase()}${provider.slice(1)} now uses this event's own settings.`,
+      );
+    } catch (e: any) {
+      onError(e?.message || 'Failed to update integration inheritance');
+      const program = programs.find((p) => p.id === selectedProgramId);
+      setIntegrationSources({
+        resend: program?.integrationSources?.resend || '',
+        didit: program?.integrationSources?.didit || '',
+        payment: program?.integrationSources?.payment || '',
+      });
+    } finally {
+      setSavingIntegrationSource(null);
+    }
+  };
+
+  const inheritedLabel = (provider: IntegrationProvider) => {
+    const status = integrationStatus?.[provider];
+    if (status?.source === 'program' && status.sourceProgramTitle) {
+      return `Provided by ${status.sourceProgramTitle}`;
+    }
+    if (provider === 'payment') {
+      return 'This event';
+    }
+    return 'Organization';
+  };
 
   const openDiditConnect = () => {
     onError(null);
@@ -349,34 +426,50 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
       <div className="space-y-2 border-b border-slate-100 pb-4">
         <h2 className="text-lg font-bold text-slate-900">Integrations</h2>
         <p className="text-sm text-slate-500 max-w-2xl">
-          Connect your organization&apos;s Razorpay, Resend, and DIDIT accounts. DIDIT powers optional identity
-          verification on public voting rounds (configured per round in Schedule &amp; Rounds).
+          Connect integrations at the organization level, then choose per event whether to use this
+          event&apos;s own setup or inherit from another event.
         </p>
       </div>
+
+      {selectedProgramId && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Event</p>
+          <p className="text-sm font-semibold text-slate-900">{selectedProgram?.title || 'Selected event'}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         <IntegrationCard
           title="Razorpay"
-          description="Sign in on Razorpay and authorize AwardX to accept payments for a program."
+          description={
+            integrationStatus?.payment?.source === 'program'
+              ? `Using payment setup from ${integrationStatus.payment.sourceProgramTitle || 'another event'}.`
+              : 'Sign in on Razorpay and authorize AwardX to accept payments for this event.'
+          }
           accentClass="from-[#0C2451] to-[#3395FF]"
           logoLabel="R"
-          connected={razorpayConnected}
-          connectedDetail={razorpayConnected ? selectedProgram?.title : undefined}
-          statusLoading={loading}
+          connected={integrationStatus?.payment?.connected || razorpayConnected}
+          connectedDetail={inheritedLabel('payment')}
+          statusLoading={loading || statusLoading}
           actionLabel="Connect with Razorpay"
           onConnect={openRazorpayConnect}
+          inheritanceValue={integrationSources.payment}
+          inheritanceOptions={inheritanceOptions}
+          inheritanceDefaultLabel="This event (own payment settings)"
+          inheritanceDisabled={!selectedProgramId || savingIntegrationSource === 'payment'}
+          onInheritanceChange={(value) => void handleIntegrationInheritanceChange('payment', value)}
         />
 
         <IntegrationCard
           title="Resend"
-          description="Sign in on Resend, choose a sending domain, and we will create an API key for you."
+          description="Organization email delivery for invites, notifications, and outreach."
           accentClass="from-slate-900 to-slate-700"
           logoLabel={<Mail className="w-5 h-5" />}
           connected={resendConnected}
           connectedDetail={
             integrationStatus?.resend?.from ||
             integrationStatus?.resend?.projectName ||
-            undefined
+            inheritedLabel('resend')
           }
           statusLoading={statusLoading}
           actionLabel="Connect with Resend"
@@ -384,21 +477,31 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({
           saving={saving}
           onConnect={() => void openResendConnect()}
           onDisconnect={() => void handleDisconnectResend()}
+          inheritanceValue={integrationSources.resend}
+          inheritanceOptions={inheritanceOptions}
+          inheritanceDefaultLabel="Organization credentials"
+          inheritanceDisabled={!selectedProgramId || savingIntegrationSource === 'resend'}
+          onInheritanceChange={(value) => void handleIntegrationInheritanceChange('resend', value)}
         />
 
         <IntegrationCard
           title="DIDIT"
-          description="Identity verification (KYC) for public voters. Add your DIDIT API key from the DIDIT console."
+          description="Organization KYC credentials for optional identity verification on public voting rounds."
           accentClass="from-violet-700 to-indigo-600"
           logoLabel={<ShieldCheck className="w-5 h-5" />}
           connected={diditConnected}
-          connectedDetail={integrationStatus?.didit?.apiBaseUrl || undefined}
+          connectedDetail={integrationStatus?.didit?.apiBaseUrl || inheritedLabel('didit')}
           statusLoading={statusLoading}
           actionLabel="Connect DIDIT"
           disconnectLabel="Disconnect DIDIT"
           saving={saving}
           onConnect={openDiditConnect}
           onDisconnect={() => void handleDisconnectDidit()}
+          inheritanceValue={integrationSources.didit}
+          inheritanceOptions={inheritanceOptions}
+          inheritanceDefaultLabel="Organization credentials"
+          inheritanceDisabled={!selectedProgramId || savingIntegrationSource === 'didit'}
+          onInheritanceChange={(value) => void handleIntegrationInheritanceChange('didit', value)}
         />
       </div>
 
@@ -742,6 +845,11 @@ const IntegrationCard = ({
   saving,
   onConnect,
   onDisconnect,
+  inheritanceValue = '',
+  inheritanceOptions = [],
+  inheritanceDefaultLabel = 'This event',
+  inheritanceDisabled = false,
+  onInheritanceChange,
 }: {
   title: string;
   description: string;
@@ -755,6 +863,11 @@ const IntegrationCard = ({
   saving?: boolean;
   onConnect: () => void;
   onDisconnect?: () => void;
+  inheritanceValue?: string;
+  inheritanceOptions?: Array<{ id: string; title: string }>;
+  inheritanceDefaultLabel?: string;
+  inheritanceDisabled?: boolean;
+  onInheritanceChange?: (value: string) => void;
 }) => (
   <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4">
     <div className="flex items-start gap-4">
@@ -778,13 +891,32 @@ const IntegrationCard = ({
           )}
         </div>
         <p className="text-sm text-slate-500 mt-1">{description}</p>
-        {connected && connectedDetail && (
+        {connectedDetail && (
           <p className="text-xs text-slate-400 mt-2 truncate" title={connectedDetail}>
             {connectedDetail}
           </p>
         )}
       </div>
     </div>
+
+    {onInheritanceChange && (
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1">Inheritance</label>
+        <select
+          value={inheritanceValue}
+          onChange={(e) => onInheritanceChange(e.target.value)}
+          disabled={inheritanceDisabled}
+          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+        >
+          <option value="">{inheritanceDefaultLabel}</option>
+          {inheritanceOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              Use as configured by {option.title}
+            </option>
+          ))}
+        </select>
+      </div>
+    )}
     <Button
       size="lg"
       className="w-full"

@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { getAuthenticatedUser } from '../../_utils/authUser';
 import { createCheckoutSchema } from '../../_utils/validation';
 import { logError, logInfo, logWarn } from '../../_utils/logger';
+import { resolveEffectivePaymentProgramId } from '../../_utils/programIntegrations';
 
 const toMinorUnits = (amount: number) => Math.max(0, Math.round(amount * 100));
 
@@ -40,11 +41,12 @@ export default async function handler(req: any, res: any) {
 
   try {
     const supabase = createSupabaseAdmin();
+    const effectiveProgramId = await resolveEffectivePaymentProgramId(supabase, programId);
 
     const { data: paymentConfig, error: paymentConfigError } = await supabase
       .from('program_payment_configs')
       .select('enabled, fee_amount, currency, provider')
-      .eq('program_id', programId)
+      .eq('program_id', effectiveProgramId)
       .maybeSingle();
 
     if (paymentConfigError) {
@@ -101,8 +103,8 @@ export default async function handler(req: any, res: any) {
     const requestOrigin = typeof req.headers?.origin === 'string' ? req.headers.origin : undefined;
     const siteUrl = process.env.SITE_URL || process.env.VITE_SITE_URL || requestOrigin || 'http://localhost:3000';
     const successPath = formId
-      ? `/form/${formId}?payment=success&session_id={CHECKOUT_SESSION_ID}`
-      : `/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+      ? `/form/${formId}?payment=success&submission_id=${submissionId}&session_id={CHECKOUT_SESSION_ID}`
+      : `/dashboard?payment=success&submission_id=${submissionId}&session_id={CHECKOUT_SESSION_ID}`;
     const cancelPath = formId
       ? `/form/${formId}?payment=cancelled`
       : '/dashboard?payment=cancelled';

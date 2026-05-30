@@ -258,12 +258,14 @@ const App: React.FC = () => {
         <Route
           path="/demo"
           element={
-            <Dashboard
-              onLogout={async () => {
-                await auth.signOut();
-                navigate('/');
-              }}
-            />
+            <ProtectedRoute>
+              <Dashboard
+                onLogout={async () => {
+                  await auth.signOut();
+                  navigate('/');
+                }}
+              />
+            </ProtectedRoute>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -3,6 +3,7 @@ import { auth, refreshUserCache, supabase } from '../services/supabase';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { consumePostAuthRedirect } from '../../lib/safeRedirect';
 
 export const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -23,13 +24,7 @@ export const AuthCallback: React.FC = () => {
       await refreshUserCache();
       setStatus('success');
       setTimeout(() => {
-        const postAuthRedirect = sessionStorage.getItem('postAuthRedirect');
-        if (postAuthRedirect) {
-          sessionStorage.removeItem('postAuthRedirect');
-          navigate(postAuthRedirect, { replace: true });
-          return;
-        }
-        navigate('/dashboard', { replace: true });
+        navigate(consumePostAuthRedirect('/dashboard'), { replace: true });
       }, 1000);
     };
 

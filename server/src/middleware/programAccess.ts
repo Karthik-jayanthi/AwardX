@@ -3,6 +3,30 @@ import { getSupabaseAdmin } from '../supabase.js';
 import type { AuthenticatedRequest } from './auth.js';
 
 /** True if user belongs to the program's organization (owner profile or active member). */
+export async function canAccessOrganization(userId: string, organizationId: string): Promise<boolean> {
+  if (!userId || !organizationId) return false;
+
+  const supabase = getSupabaseAdmin();
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profile?.organization_id === organizationId) return true;
+
+  const { data: memberships } = await supabase
+    .from('organization_members')
+    .select('status')
+    .eq('organization_id', organizationId)
+    .eq('user_id', userId)
+    .in('status', ['active', 'pending']);
+
+  return (memberships || []).length > 0;
+}
+
+/** True if user belongs to the program's organization (owner profile or active member). */
 export async function canAccessProgram(userId: string, programId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin();
 
@@ -14,22 +38,7 @@ export async function canAccessProgram(userId: string, programId: string): Promi
 
   if (!program?.organization_id) return false;
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('organization_id')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (profile?.organization_id === program.organization_id) return true;
-
-  const { data: memberships } = await supabase
-    .from('organization_members')
-    .select('status')
-    .eq('organization_id', program.organization_id)
-    .eq('user_id', userId)
-    .in('status', ['active', 'pending']);
-
-  return (memberships || []).length > 0;
+  return canAccessOrganization(userId, program.organization_id);
 }
 
 export function requireProgramAccess(paramName = 'programId') {

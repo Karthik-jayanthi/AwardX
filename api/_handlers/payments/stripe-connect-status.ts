@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from '../../_utils/authUser';
 import { stripeConnectStatusSchema } from '../../_utils/validation';
 import { deriveStripeConnectStatus } from '../../_utils/stripeConnect';
 import { logError, logInfo, logWarn } from '../../_utils/logger';
+import { resolveEffectivePaymentProgramId } from '../../_utils/programIntegrations';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -58,10 +59,12 @@ export default async function handler(req: any, res: any) {
       res.status(403).json({ error: 'You are not a member of this program\'s organization' });
       return;
     }
+
+    const effectiveProgramId = await resolveEffectivePaymentProgramId(supabase, programId);
     const { data: paymentConfig, error: configError } = await supabase
       .from('program_payment_configs')
       .select('id, provider, provider_account_id, connected, onboarding_completed')
-      .eq('program_id', programId)
+      .eq('program_id', effectiveProgramId)
       .maybeSingle();
 
     if (configError) {

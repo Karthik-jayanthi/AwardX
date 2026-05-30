@@ -9,6 +9,8 @@ import { submissionDrafts, formAnalytics } from '../../services/database';
 import { auth } from '../../services/supabase';
 import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
+import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
+import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
 import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -177,12 +179,38 @@ export const FormSubmissionPage: React.FC = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('payment') === 'success') {
-      setIsSubmitted(true);
-      setPaymentState('success');
-      setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
+    const payment = params.get('payment');
+    const sessionId = params.get('session_id');
+    const submissionId = params.get('submission_id');
+
+    if (payment === 'success' && sessionId && submissionId) {
+      void (async () => {
+        try {
+          const verifyResponse = await fetch('/api/payments/stripe-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, submissionId }),
+          });
+          const verifyPayload = await verifyResponse.json();
+          if (!verifyResponse.ok) {
+            throw new Error(verifyPayload?.error || 'Payment verification failed');
+          }
+          setIsSubmitted(true);
+          setPaymentState('success');
+          setPaymentMessage('Payment confirmed. Your submission has been received successfully.');
+        } catch (error: any) {
+          setPaymentState('cancelled');
+          setPaymentMessage(error?.message || 'Payment could not be verified. Contact support if you were charged.');
+        }
+      })();
+      return;
     }
-    if (params.get('payment') === 'cancelled') {
+
+    if (payment === 'success') {
+      setPaymentState('cancelled');
+      setPaymentMessage('Payment could not be verified automatically. Contact support if you were charged.');
+    }
+    if (payment === 'cancelled') {
       setPaymentState('cancelled');
       setPaymentMessage('Payment was cancelled. You can submit again to complete payment.');
     }
@@ -241,7 +269,7 @@ export const FormSubmissionPage: React.FC = () => {
 
         const { data: programRow } = await supabase
           .from('programs')
-          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status')
+          .select('application_mode, require_github_auth, kyc_enabled, active_form_id, status, integration_sources')
           .eq('id', form.program_id)
           .maybeSingle();
 
@@ -291,10 +319,15 @@ export const FormSubmissionPage: React.FC = () => {
           (categoryRows || []) as Array<{ id: string; title: string; parent_id: string | null }>,
         );
 
+        const paymentProgramId = getEffectivePaymentProgramId(
+          form.program_id,
+          normalizeIntegrationSources(programRow?.integration_sources),
+        );
+
         const { data: paymentConfigRow } = await supabase
-          .from('program_payment_configs')
-          .select('*')
-          .eq('program_id', form.program_id)
+          .from('program_payment_configs_public')
+          .select('enabled, provider, currency, fee_amount, connected, public_key')
+          .eq('program_id', paymentProgramId)
           .maybeSingle();
 
         if (paymentConfigRow) {
@@ -802,7 +835,7 @@ export const FormSubmissionPage: React.FC = () => {
             </p>
             <Button
               onClick={async () => {
-                sessionStorage.setItem('postAuthRedirect', returnUrl);
+                storePostAuthRedirect(returnUrl);
                 await auth.signInWithProvider('github');
               }}
               className="w-full bg-white text-slate-900 hover:bg-slate-100"

@@ -111,9 +111,14 @@ const PendingInviteRow: React.FC<{
             {/* Role */}
             <td className="p-4">
                 {invite.roleName ? (
-                    <span className="px-2 py-1 rounded-md text-xs font-bold border bg-slate-50 text-slate-600 border-slate-100">
-                        {invite.roleName}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                        <span className="px-2 py-1 rounded-md text-xs font-bold border bg-slate-50 text-slate-600 border-slate-100">
+                            {invite.roleName}
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-500">
+                            {invite.programId ? programTitle : 'All events'}
+                        </span>
+                    </div>
                 ) : (
                     <span className="text-xs text-slate-400">—</span>
                 )}
@@ -190,6 +195,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [inviteEmailBlocks, setInviteEmailBlocks] = useState<string[]>([]);
     const [inviteEmailDraft, setInviteEmailDraft] = useState('');
     const [inviteRoleId, setInviteRoleId] = useState<string>('');
+    const [inviteScope, setInviteScope] = useState<'program' | 'organization'>('program');
     const [isBulkInviting, setIsBulkInviting] = useState(false);
     const [memberSearch, setMemberSearch] = useState('');
     const [memberPage, setMemberPage] = useState(1);
@@ -283,14 +289,14 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // ── Mutations ──────────────────────────────────────────────────────────────
     const inviteMutation = useMutation({
-        mutationFn: async (vars: { email: string; roleId: string }) => {
+        mutationFn: async (vars: { email: string; roleId: string; scope: 'program' | 'organization' }) => {
             const roleName = rawRoles.find(r => r.id === vars.roleId)?.name;
             const result: any = await sendTeamInviteEmail({
                 email: vars.email,
                 roleId: vars.roleId,
                 roleName,
                 programTitle: eventTitle,
-                programId: eventId,
+                programId: vars.scope === 'program' ? eventId : undefined,
             }, { onTrace: appendRequestTrace });
             return result || { ok: true, emailSent: true };
         },
@@ -509,7 +515,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         try {
             for (const email of dedupedEmails) {
                 try {
-                    const result: any = await inviteMutation.mutateAsync({ email, roleId: inviteRoleId });
+                    const result: any = await inviteMutation.mutateAsync({ email, roleId: inviteRoleId, scope: inviteScope });
                     if (result?.emailSent === false) {
                         warned.push(email);
                     }
@@ -564,7 +570,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
 
     // Filter pending invites for this program only.
     const filteredPendingInvites = pendingInvites.filter(
-        inv => inv.programId === eventId
+        inv => inv.programId === eventId || inv.programId == null
     );
 
     if (!activeEvent) {
@@ -725,11 +731,16 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                                     </UserHoverCard>
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className={`px-2 py-1 rounded-md text-xs font-bold border ${member.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                                        member.role === 'Judge' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                                                            'bg-slate-50 text-slate-600 border-slate-100'}`}>
-                                                        {member.role}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className={`px-2 py-1 rounded-md text-xs font-bold border ${member.role === 'Admin' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                                            member.role === 'Judge' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                                                'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                                            {member.role}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-slate-500">
+                                                            {member.programScope === 'organization' ? 'All events' : eventTitle}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td className="p-4">
                                                     <div className="flex items-center gap-2">
@@ -984,6 +995,31 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                 onPaste={handleInviteDraftPaste}
                             />
                             <p className="text-[11px] text-slate-500 px-2 pt-1">Press Enter, comma, or Tab to add each email.</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-1">Access scope</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setInviteScope('program')}
+                                className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${inviteScope === 'program'
+                                    ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                            >
+                                <span className="font-semibold block">This event only</span>
+                                <span className="text-xs text-slate-500">Access limited to {eventTitle}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setInviteScope('organization')}
+                                className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${inviteScope === 'organization'
+                                    ? 'border-indigo-300 bg-indigo-50 text-indigo-900'
+                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}
+                            >
+                                <span className="font-semibold block">Whole organization</span>
+                                <span className="text-xs text-slate-500">Access to all events in this org</span>
+                            </button>
                         </div>
                     </div>
                     <div>

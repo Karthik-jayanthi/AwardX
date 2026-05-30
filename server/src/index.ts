@@ -35,6 +35,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
+app.use((_req, res, next) => {
+	res.setHeader('X-Content-Type-Options', 'nosniff');
+	res.setHeader('X-Frame-Options', 'DENY');
+	res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+	res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+	next();
+});
+
 app.get('/api/health', (_req, res) => {
 	res.json({ ok: true });
 });

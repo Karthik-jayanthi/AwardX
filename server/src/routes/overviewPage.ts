@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { requireProgramAccess } from '../middleware/programAccess.js';
+import { requireProgramManage } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { cacheKeys, cacheTtls, deleteCache, wrapWithCache } from '../cache/redisCache.js';
 
@@ -177,7 +178,7 @@ router.post(
   },
 );
 
-router.get('/:programId', requireAuth, async (req, res) => {
+router.get('/:programId', requireAuth, requireProgramAccess('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -221,7 +222,7 @@ router.get('/:programId', requireAuth, async (req, res) => {
   }
 });
 
-router.put('/:programId/config', requireAuth, async (req, res) => {
+router.put('/:programId/config', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -256,7 +257,7 @@ router.put('/:programId/config', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:programId/sections', requireAuth, async (req, res) => {
+router.post('/:programId/sections', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -295,7 +296,7 @@ router.post('/:programId/sections', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/:programId/sections/:id', requireAuth, async (req, res) => {
+router.delete('/:programId/sections/:id', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId, id } = req.params;
   if (!programId || !id) {
     return res.status(400).json({ error: 'programId and section id are required' });
@@ -315,7 +316,7 @@ router.delete('/:programId/sections/:id', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:programId/sponsors', requireAuth, async (req, res) => {
+router.post('/:programId/sponsors', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -353,7 +354,7 @@ router.post('/:programId/sponsors', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/:programId/sponsors/:id', requireAuth, async (req, res) => {
+router.delete('/:programId/sponsors/:id', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId, id } = req.params;
   if (!programId || !id) {
     return res.status(400).json({ error: 'programId and sponsor id are required' });
@@ -373,7 +374,7 @@ router.delete('/:programId/sponsors/:id', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:programId/faqs', requireAuth, async (req, res) => {
+router.post('/:programId/faqs', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -409,7 +410,7 @@ router.post('/:programId/faqs', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/:programId/faqs/:id', requireAuth, async (req, res) => {
+router.delete('/:programId/faqs/:id', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId, id } = req.params;
   if (!programId || !id) {
     return res.status(400).json({ error: 'programId and FAQ id are required' });
@@ -429,7 +430,7 @@ router.delete('/:programId/faqs/:id', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/:programId/timeline', requireAuth, async (req, res) => {
+router.post('/:programId/timeline', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId } = req.params;
   if (!programId) {
     return res.status(400).json({ error: 'programId is required' });
@@ -466,7 +467,7 @@ router.post('/:programId/timeline', requireAuth, async (req, res) => {
   }
 });
 
-router.delete('/:programId/timeline/:id', requireAuth, async (req, res) => {
+router.delete('/:programId/timeline/:id', requireAuth, requireProgramAccess('programId'), requireProgramManage('programId'), async (req, res) => {
   const { programId, id } = req.params;
   if (!programId || !id) {
     return res.status(400).json({ error: 'programId and timeline id are required' });

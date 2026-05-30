@@ -5,7 +5,7 @@ import {
    Store, Briefcase, Sparkles, Calendar, ArrowRight,
    LogOut, Bell, Search, RefreshCw, Plus, Pencil, Trash2, Layers, CheckCircle2
 } from 'lucide-react';
-import { Program, EventType } from '../../services/models';
+import { Program, EventType, Organization } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService } from '../../services/database';
 import { Modal } from '../Modal';
@@ -19,7 +19,9 @@ interface UserData {
 }
 
 interface EventSelectionViewProps {
+   activeOrganization: Organization;
    onSelectEvent: (event: Program) => void;
+   onSwitchOrganization: () => void;
    onLogout: () => void;
 }
 
@@ -122,7 +124,12 @@ const ExistingEventCard: React.FC<{
    </motion.div>
 );
 
-export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelectEvent, onLogout }) => {
+export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
+   activeOrganization,
+   onSelectEvent,
+   onSwitchOrganization,
+   onLogout,
+}) => {
    const createSectionRef = React.useRef<HTMLElement>(null);
    const [events, setEvents] = useState<Program[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
@@ -266,21 +273,13 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
       document.addEventListener('visibilitychange', handleVisibilityChange);
       window.addEventListener('focus', handleFocus);
 
-      // Set up periodic refresh (every 20 seconds when visible)
-      const refreshInterval = setInterval(() => {
-         if (!document.hidden) {
-            loadPrograms(false);
-         }
-      }, 20000);
-
       return () => {
          document.removeEventListener('visibilitychange', handleVisibilityChange);
          window.removeEventListener('focus', handleFocus);
-         clearInterval(refreshInterval);
          clearTimeout(visibilityTimeout);
          clearTimeout(focusTimeout);
       };
-   }, [loadPrograms]);
+   }, [loadPrograms, activeOrganization.id]);
 
    const handleTypeSelect = (type: EventType) => {
       setSelectedType(type);
@@ -425,11 +424,20 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                   </div>
                   <div>
                      <span className="font-display text-xl font-semibold text-slate-900">AwardX</span>
-                     <p className="text-[11px] text-slate-500 -mt-0.5">Project Console</p>
+                     <p className="text-[11px] text-slate-500 -mt-0.5">{activeOrganization.name}</p>
                   </div>
                </div>
 
                <div className="flex items-center gap-4">
+                  <button
+                     type="button"
+                     onClick={onSwitchOrganization}
+                     className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 hover:border-emerald-200"
+                  >
+                     <Building2 className="w-4 h-4" />
+                     <span className="hidden sm:inline">Switch Organization</span>
+                     <span className="sm:hidden">Organizations</span>
+                  </button>
                   <div className="hidden md:flex relative">
                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                      <input
@@ -479,7 +487,9 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({ onSelect
                <div className="mb-6">
                   <div>
                      <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Your Events</h2>
-                     <p className="text-slate-500 mt-1">Manage your active programs and competitions.</p>
+                     <p className="text-slate-500 mt-1">
+                        Manage events inside <span className="font-medium text-slate-700">{activeOrganization.name}</span>.
+                     </p>
                   </div>
                </div>
 

@@ -15,6 +15,7 @@ import webhooksStripe from './webhooks/stripe';
 import webhooksResend from './webhooks/resend';
 import paymentsCreateCheckout from './payments/create-checkout';
 import paymentsRazorpayVerify from './payments/razorpay-verify';
+import paymentsStripeVerify from './payments/stripe-verify';
 import paymentsStripeConnectStart from './payments/stripe-connect-start';
 import paymentsStripeConnectStatus from './payments/stripe-connect-status';
 import notificationsDeadlineApproaching from './notifications/deadline-approaching';
@@ -35,6 +36,7 @@ const routes: Record<string, RouteEntry> = {
   'webhooks/resend': { POST: webhooksResend },
   'payments/create-checkout': { POST: paymentsCreateCheckout },
   'payments/razorpay-verify': { POST: paymentsRazorpayVerify },
+  'payments/stripe-verify': { POST: paymentsStripeVerify },
   'payments/stripe-connect-start': { GET: paymentsStripeConnectStart },
   'payments/stripe-connect-status': { GET: paymentsStripeConnectStatus },
   'notifications/deadline-approaching': { POST: notificationsDeadlineApproaching },

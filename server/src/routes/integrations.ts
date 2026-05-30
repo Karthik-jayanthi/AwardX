@@ -2,7 +2,16 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { Resend } from 'resend';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
+import { canAccessProgram } from '../middleware/programAccess.js';
+import { ensureCanManageProgram } from '../middleware/programManagement.js';
 import { getSupabaseAdmin } from '../supabase.js';
+import {
+  buildIntegrationStatusEntry,
+  getProgramIntegrationContext,
+  mergeIntegrationSources,
+  normalizeIntegrationSources,
+  type IntegrationProvider,
+} from '../lib/programIntegrations.js';
 
 const router = Router();
 
@@ -114,12 +123,32 @@ router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const organizationId = await getUserOrganizationId(userId);
+    const programId = typeof req.query.programId === 'string' ? req.query.programId : null;
+
+    const emptyStatus = {
+      resend: { connected: false, source: null, sourceProgramId: null, sourceProgramTitle: null },
+      didit: { connected: false, source: null, sourceProgramId: null, sourceProgramTitle: null },
+      payment: { connected: false, source: 'self', sourceProgramId: null, sourceProgramTitle: null, provider: null },
+    };
+
+    let organizationId: string | null = null;
+
+    if (programId) {
+      const permitted = await canAccessProgram(userId, programId);
+      if (!permitted) {
+        return res.status(403).json({ error: 'You do not have access to this program' });
+      }
+      const programContext = await getProgramIntegrationContext(programId);
+      if (!programContext) {
+        return res.json(emptyStatus);
+      }
+      organizationId = programContext.organizationId;
+    } else {
+      organizationId = await getUserOrganizationId(userId);
+    }
+
     if (!organizationId) {
-      return res.json({
-        resend: { connected: false, source: null },
-        didit: { connected: false, source: null },
-      });
+      return res.json(emptyStatus);
     }
 
     const supabase = getSupabaseAdmin();
@@ -137,31 +166,157 @@ router.get('/status', requireAuth, async (req: AuthenticatedRequest, res) => {
       .eq('provider', 'didit')
       .maybeSingle();
 
-    const orgConnected = !!resendRow?.connected && !!resendRow?.api_key_encrypted;
-    const config = (resendRow?.config || {}) as Record<string, string>;
+    const orgResendConnected = !!resendRow?.connected && !!resendRow?.api_key_encrypted;
+    const resendConfig = (resendRow?.config || {}) as Record<string, string>;
     const diditConfig = (diditRow?.config || {}) as Record<string, string>;
-    const diditConnected = !!diditRow?.connected && !!diditRow?.api_key_encrypted;
+    const orgDiditConnected = !!diditRow?.connected && !!diditRow?.api_key_encrypted;
 
-    return res.json({
-      resend: {
-        connected: orgConnected,
-        source: orgConnected ? 'organization' : null,
-        from: config.from || null,
-        fromEmail: config.fromEmail || null,
-        fromName: config.fromName || null,
-        connectedAt: resendRow?.connected_at || null,
-        projectName: config.domainName || null,
-      },
-      didit: {
-        connected: diditConnected,
-        source: diditConnected ? 'organization' : null,
-        apiBaseUrl: diditConfig.apiBaseUrl || process.env.DIDIT_API_BASE_URL || 'https://verification.didit.me',
-        connectedAt: diditRow?.connected_at || null,
-        hasWebhookSecret: !!diditConfig.webhookSecret,
-      },
-    });
+    let sources = normalizeIntegrationSources({});
+    let programTitle = '';
+
+    if (programId) {
+      const context = await getProgramIntegrationContext(programId);
+      if (!context || context.organizationId !== organizationId) {
+        return res.json(emptyStatus);
+      }
+      sources = context.sources;
+      programTitle = context.title;
+    }
+
+    let paymentSelfPayload: Record<string, unknown> = {
+      connected: false,
+      provider: null,
+      publicKey: null,
+    };
+
+    if (programId) {
+      const paymentSourceProgramId = sources.payment || programId;
+      const { data: paymentConfig } = await supabase
+        .from('program_payment_configs')
+        .select('provider, connected, public_key, enabled')
+        .eq('program_id', paymentSourceProgramId)
+        .maybeSingle();
+
+      paymentSelfPayload = {
+        connected: !!paymentConfig?.connected && !!paymentConfig?.enabled,
+        provider: paymentConfig?.provider || null,
+        publicKey: paymentConfig?.public_key || null,
+      };
+    }
+
+    const [resend, didit, payment] = await Promise.all([
+      buildIntegrationStatusEntry({
+        provider: 'resend',
+        sources,
+        programTitle,
+        orgConnected: orgResendConnected,
+        orgPayload: {
+          from: resendConfig.from || null,
+          fromEmail: resendConfig.fromEmail || null,
+          fromName: resendConfig.fromName || null,
+          connectedAt: resendRow?.connected_at || null,
+          projectName: resendConfig.domainName || null,
+        },
+      }),
+      buildIntegrationStatusEntry({
+        provider: 'didit',
+        sources,
+        programTitle,
+        orgConnected: orgDiditConnected,
+        orgPayload: {
+          apiBaseUrl: diditConfig.apiBaseUrl || process.env.DIDIT_API_BASE_URL || 'https://verification.didit.me',
+          connectedAt: diditRow?.connected_at || null,
+          hasWebhookSecret: !!diditConfig.webhookSecret,
+        },
+      }),
+      buildIntegrationStatusEntry({
+        provider: 'payment',
+        sources,
+        programTitle,
+        orgConnected: false,
+        orgPayload: {},
+        selfPayload: paymentSelfPayload,
+      }),
+    ]);
+
+    return res.json({ resend, didit, payment });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Failed to load integration status' });
+  }
+});
+
+router.put('/program/:programId/sources', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.userId;
+    const { programId } = req.params;
+    if (!userId || !programId) {
+      return res.status(400).json({ error: 'programId is required' });
+    }
+
+    const manageCheck = await ensureCanManageProgram(userId, programId);
+    if (!manageCheck.ok) {
+      return res.status(manageCheck.status).json({ error: manageCheck.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const context = await getProgramIntegrationContext(programId);
+    if (!context) {
+      return res.status(404).json({ error: 'Program not found' });
+    }
+
+    const organizationId = context.organizationId;
+
+    const patch = req.body?.integration_sources;
+    if (!patch || typeof patch !== 'object') {
+      return res.status(400).json({ error: 'integration_sources object is required' });
+    }
+
+    const providers: IntegrationProvider[] = ['resend', 'didit', 'payment'];
+    const normalizedPatch: Partial<Record<IntegrationProvider, string | null>> = {};
+
+    for (const provider of providers) {
+      if (!(provider in patch)) continue;
+      const value = patch[provider];
+      if (value === null || value === '') {
+        normalizedPatch[provider] = null;
+        continue;
+      }
+      if (typeof value !== 'string') {
+        return res.status(400).json({ error: `Invalid source for ${provider}` });
+      }
+      if (value === programId) {
+        return res.status(400).json({ error: 'A program cannot inherit integrations from itself' });
+      }
+
+      const { data: sourceProgram } = await supabase
+        .from('programs')
+        .select('id, organization_id')
+        .eq('id', value)
+        .maybeSingle();
+
+      if (!sourceProgram || sourceProgram.organization_id !== organizationId) {
+        return res.status(400).json({ error: 'Source program must belong to the same organization' });
+      }
+
+      normalizedPatch[provider] = value;
+    }
+
+    const nextSources = mergeIntegrationSources(context.sources, normalizedPatch);
+
+    const { data, error } = await supabase
+      .from('programs')
+      .update({ integration_sources: nextSources })
+      .eq('id', programId)
+      .select('id, integration_sources')
+      .single();
+
+    if (error || !data) {
+      return res.status(500).json({ error: error?.message || 'Failed to update integration sources' });
+    }
+
+    return res.json({ data });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Failed to update integration sources' });
   }
 });
 

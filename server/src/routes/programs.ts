@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { getSupabaseAdmin } from '../supabase.js';
-import { requireAuth } from '../middleware/auth.js';
+import { ensureCanManageProgram } from '../middleware/programManagement.js';
+import { canAccessOrganization, requireProgramAccess } from '../middleware/programAccess.js';
+import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import {
 	cacheKeys,
 	cacheTtls,
@@ -30,8 +32,20 @@ const PROGRAM_SELECT = `
 	created_by
 `;
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, async (req: AuthenticatedRequest, res) => {
 	const orgId = typeof req.query.organizationId === 'string' ? req.query.organizationId : '';
+	const userId = req.userId;
+	if (!userId) {
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	if (orgId) {
+		const permitted = await canAccessOrganization(userId, orgId);
+		if (!permitted) {
+			return res.status(403).json({ error: 'You do not have access to this organization' });
+		}
+	}
+
 	const key = orgId ? cacheKeys.programsByOrg(orgId) : cacheKeys.programsAll();
 
 	try {
@@ -44,6 +58,25 @@ router.get('/', requireAuth, async (req, res) => {
 
 			if (orgId) {
 				query = query.eq('organization_id', orgId);
+			} else {
+				const supabaseForOrgs = getSupabaseAdmin();
+				const { data: profile } = await supabaseForOrgs
+					.from('profiles')
+					.select('organization_id')
+					.eq('id', userId)
+					.maybeSingle();
+				const { data: memberships } = await supabaseForOrgs
+					.from('organization_members')
+					.select('organization_id')
+					.eq('user_id', userId)
+					.in('status', ['active', 'pending']);
+				const orgIds = new Set<string>();
+				if (profile?.organization_id) orgIds.add(profile.organization_id);
+				for (const row of memberships || []) {
+					if (row.organization_id) orgIds.add(row.organization_id);
+				}
+				if (orgIds.size === 0) return [];
+				query = query.in('organization_id', Array.from(orgIds));
 			}
 
 			const { data, error } = await query;
@@ -60,7 +93,7 @@ router.get('/', requireAuth, async (req, res) => {
 	}
 });
 
-router.get('/:id/stats', requireAuth, async (req, res) => {
+router.get('/:id/stats', requireAuth, requireProgramAccess('id'), async (req, res) => {
 	const { id } = req.params;
 	if (!id) {
 		return res.status(400).json({ error: 'Program id is required' });
@@ -152,7 +185,7 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
 	}
 });
 
-router.get('/:id', requireAuth, async (req, res) => {
+router.get('/:id', requireAuth, requireProgramAccess('id'), async (req, res) => {
 	const { id } = req.params;
 	if (!id) {
 		return res.status(400).json({ error: 'Program id is required' });
@@ -184,7 +217,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 	}
 });
 
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, async (req: AuthenticatedRequest, res) => {
 	const {
 		organization_id,
 		title,
@@ -201,6 +234,16 @@ router.post('/', requireAuth, async (req, res) => {
 
 	if (!organization_id || !title) {
 		return res.status(400).json({ error: 'organization_id and title are required' });
+	}
+
+	const userId = req.userId;
+	if (!userId) {
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	const permitted = await canAccessOrganization(userId, organization_id);
+	if (!permitted) {
+		return res.status(403).json({ error: 'You do not have access to this organization' });
 	}
 
 	try {
@@ -236,10 +279,20 @@ router.post('/', requireAuth, async (req, res) => {
 	}
 });
 
-router.put('/:id', requireAuth, async (req, res) => {
+router.put('/:id', requireAuth, requireProgramAccess('id'), async (req: AuthenticatedRequest, res) => {
 	const { id } = req.params;
 	if (!id) {
 		return res.status(400).json({ error: 'Program id is required' });
+	}
+
+	const userId = req.userId;
+	if (!userId) {
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	const manageCheck = await ensureCanManageProgram(userId, id);
+	if (!manageCheck.ok) {
+		return res.status(manageCheck.status).json({ error: manageCheck.error });
 	}
 
 	try {
@@ -302,10 +355,20 @@ router.put('/:id', requireAuth, async (req, res) => {
 	}
 });
 
-router.delete('/:id', requireAuth, async (req, res) => {
+router.delete('/:id', requireAuth, requireProgramAccess('id'), async (req: AuthenticatedRequest, res) => {
 	const { id } = req.params;
 	if (!id) {
 		return res.status(400).json({ error: 'Program id is required' });
+	}
+
+	const userId = req.userId;
+	if (!userId) {
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	const manageCheck = await ensureCanManageProgram(userId, id);
+	if (!manageCheck.ok) {
+		return res.status(manageCheck.status).json({ error: manageCheck.error });
 	}
 
 	try {

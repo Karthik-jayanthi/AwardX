@@ -3,6 +3,7 @@ import { createSupabaseAdmin } from '../../_utils/supabaseAdmin';
 import { getAuthenticatedUser } from '../../_utils/authUser';
 import { stripeConnectStartSchema } from '../../_utils/validation';
 import { logError, logInfo, logWarn } from '../../_utils/logger';
+import { resolveEffectivePaymentProgramId } from '../../_utils/programIntegrations';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -57,10 +58,12 @@ export default async function handler(req: any, res: any) {
       res.status(403).json({ error: 'You are not a member of this program\'s organization' });
       return;
     }
+
+    const effectiveProgramId = await resolveEffectivePaymentProgramId(supabase, programId);
     const { data: paymentConfig } = await supabase
       .from('program_payment_configs')
       .select('id, provider_account_id, provider')
-      .eq('program_id', programId)
+      .eq('program_id', effectiveProgramId)
       .maybeSingle();
 
     let accountId = paymentConfig?.provider_account_id || '';

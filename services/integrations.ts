@@ -3,7 +3,9 @@ import { fetchBackendJson } from './backendApi';
 export type IntegrationStatus = {
   resend: {
     connected: boolean;
-    source: 'organization' | null;
+    source: 'organization' | 'program' | null;
+    sourceProgramId?: string | null;
+    sourceProgramTitle?: string | null;
     from?: string | null;
     fromEmail?: string | null;
     fromName?: string | null;
@@ -12,10 +14,20 @@ export type IntegrationStatus = {
   };
   didit: {
     connected: boolean;
-    source: 'organization' | null;
+    source: 'organization' | 'program' | null;
+    sourceProgramId?: string | null;
+    sourceProgramTitle?: string | null;
     apiBaseUrl?: string | null;
     connectedAt?: string | null;
     hasWebhookSecret?: boolean;
+  };
+  payment?: {
+    connected: boolean;
+    source: 'self' | 'program';
+    sourceProgramId?: string | null;
+    sourceProgramTitle?: string | null;
+    provider?: string | null;
+    publicKey?: string | null;
   };
 };
 
@@ -25,11 +37,28 @@ export type ResendDomain = {
   status: string;
 };
 
-export async function getIntegrationStatus(): Promise<IntegrationStatus> {
-  return fetchBackendJson<IntegrationStatus>('/api/integrations/status', {
+export async function getIntegrationStatus(programId?: string): Promise<IntegrationStatus> {
+  const query = programId ? `?programId=${encodeURIComponent(programId)}` : '';
+  return fetchBackendJson<IntegrationStatus>(`/api/integrations/status${query}`, {
     requireAuth: true,
     errorPrefix: 'Integrations',
   });
+}
+
+export async function setProgramIntegrationSources(
+  programId: string,
+  patch: Partial<{ resend: string | null; didit: string | null; payment: string | null }>,
+): Promise<{ integration_sources: Record<string, string | null> }> {
+  const response = await fetchBackendJson<{ data: { integration_sources: Record<string, string | null> } }>(
+    `/api/integrations/program/${encodeURIComponent(programId)}/sources`,
+    {
+      method: 'PUT',
+      requireAuth: true,
+      errorPrefix: 'Integrations',
+      body: { integration_sources: patch },
+    },
+  );
+  return response.data;
 }
 
 export async function startRazorpayOAuth(programId: string): Promise<{ authUrl: string }> {

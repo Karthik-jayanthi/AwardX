@@ -7,6 +7,9 @@ import crypto from 'crypto';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { getSupabaseAdmin } from '../supabase.js';
 import { getDiditForProgram } from '../lib/orgDidit.js';
+import { resolveDiditApiBaseUrl } from '../lib/diditUrl.js';
+import { canAccessProgram } from '../middleware/programAccess.js';
+import { sanitizeRedirectPath } from '../lib/safeRedirect.js';
 
 const router = Router();
 
@@ -39,6 +42,11 @@ router.post('/didit/start', requireAuth, async (req: AuthenticatedRequest, res) 
       return res.status(400).json({ error: 'KYC is not enabled for this program' });
     }
 
+    const permitted = await canAccessProgram(userId, programId);
+    if (!permitted) {
+      return res.status(403).json({ error: 'You do not have access to this program' });
+    }
+
     const didit = await getDiditForProgram(programId);
     if (!didit.connected || !didit.apiKey) {
       return res.status(400).json({
@@ -52,7 +60,8 @@ router.post('/didit/start', requireAuth, async (req: AuthenticatedRequest, res) 
     let verificationUrl: string | null = null;
 
     try {
-      const response = await fetch(`${didit.apiBaseUrl.replace(/\/$/, '')}/v2/session/`, {
+      const apiBaseUrl = resolveDiditApiBaseUrl(didit.apiBaseUrl);
+      const response = await fetch(`${apiBaseUrl}/v2/session/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -116,6 +125,10 @@ router.post('/didit/start', requireAuth, async (req: AuthenticatedRequest, res) 
 });
 
 router.get('/didit/demo-complete', requireAuth, async (req: AuthenticatedRequest, res) => {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_KYC_DEMO !== 'true') {
+    return res.status(404).send('Not found');
+  }
+
   const session = String(req.query.session || '');
   const programId = String(req.query.program_id || '');
   const userId = req.userId;
@@ -147,8 +160,10 @@ router.get('/didit/demo-complete', requireAuth, async (req: AuthenticatedRequest
       .eq('user_id', userId)
       .single();
 
-    const returnTarget =
-      (row?.metadata as { return_url?: string })?.return_url || `${getSiteUrl(req)}/dashboard`;
+    const returnTarget = sanitizeRedirectPath(
+      (row?.metadata as { return_url?: string })?.return_url,
+      `${getSiteUrl(req)}/dashboard`,
+    );
 
     return res.redirect(`${returnTarget}${returnTarget.includes('?') ? '&' : '?'}kyc=verified`);
   } catch (error: any) {
@@ -163,6 +178,11 @@ router.get('/status/:programId', requireAuth, async (req: AuthenticatedRequest, 
   if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    const permitted = await canAccessProgram(userId, programId);
+    if (!permitted) {
+      return res.status(403).json({ error: 'You do not have access to this program' });
+    }
+
     const supabase = getSupabaseAdmin();
     const { data } = await supabase
       .from('kyc_verifications')
@@ -192,9 +212,28 @@ router.post('/didit/webhook', async (req, res) => {
     const supabase = getSupabaseAdmin();
     const { data: existing } = await supabase
       .from('kyc_verifications')
-      .select('id')
+      .select('id, program_id')
       .eq('provider_session_id', sessionId)
       .maybeSingle();
+
+    if (!existing?.program_id) {
+      return res.status(404).json({ error: 'Unknown verification session' });
+    }
+
+    const didit = await getDiditForProgram(existing.program_id);
+    const webhookSecret = didit.webhookSecret;
+    const signatureHeader =
+      (typeof req.headers['x-signature'] === 'string' && req.headers['x-signature']) ||
+      (typeof req.headers['x-didit-signature'] === 'string' && req.headers['x-didit-signature']) ||
+      (typeof req.headers.authorization === 'string' ? req.headers.authorization.replace(/^Bearer\s+/i, '') : '');
+
+    if (!webhookSecret) {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(503).json({ error: 'Webhook verification is not configured' });
+      }
+    } else if (signatureHeader !== webhookSecret) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
 
     const mappedStatus =
       status === 'approved' || status === 'verified' || status === 'completed'

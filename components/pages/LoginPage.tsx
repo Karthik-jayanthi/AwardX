@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Mail, Lock, Eye, EyeOff, Gavel, Star, TrendingUp } from 'lucide-react';
 import { auth } from '../../services/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { consumePostAuthRedirect, sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
 
 function humanizeAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -38,7 +39,7 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const nextPath = params.get('next') || params.get('redirect');
+  const nextPath = sanitizeRedirectPath(params.get('next') || params.get('redirect'), '');
 
   React.useEffect(() => {
     const teamInviteToken = params.get('teamInviteToken');
@@ -57,7 +58,7 @@ export const LoginPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       if (nextPath) {
-        sessionStorage.setItem('postAuthRedirect', nextPath);
+        storePostAuthRedirect(nextPath);
       }
       const { error: authError } = await auth.signInWithProvider('google');
       if (authError) {
@@ -87,7 +88,7 @@ export const LoginPage: React.FC = () => {
         if (returnUrl) {
           sessionStorage.removeItem('formReturnUrl');
           sessionStorage.removeItem('postAuthRedirect');
-          window.location.href = returnUrl;
+          window.location.href = sanitizeRedirectPath(returnUrl);
         } else if (nextPath) {
           navigate(nextPath);
         } else {

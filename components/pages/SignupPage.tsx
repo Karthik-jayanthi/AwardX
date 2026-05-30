@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Check, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { auth } from '../../services/supabase';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { sanitizeRedirectPath, storePostAuthRedirect } from '../../lib/safeRedirect';
 
 function humanizeAuthError(message: string): string {
   const m = message.toLowerCase();
@@ -38,7 +39,7 @@ export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const nextPath = params.get('next');
+  const nextPath = sanitizeRedirectPath(params.get('next'), '');
 
   React.useEffect(() => {
     const teamInviteToken = params.get('teamInviteToken');
@@ -58,7 +59,7 @@ export const SignupPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       if (nextPath) {
-        sessionStorage.setItem('postAuthRedirect', nextPath);
+        storePostAuthRedirect(nextPath);
       }
       const { error: authError } = await auth.signInWithProvider('google');
       if (authError) {

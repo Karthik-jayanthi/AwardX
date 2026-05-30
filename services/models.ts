@@ -24,6 +24,18 @@ export type EventType =
   | 'Commission'
   | 'Other';
 
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+  website?: string;
+  industry?: string;
+  plan?: string;
+  eventCount?: number;
+  createdAt?: string;
+}
+
 export interface Program {
   id: string;
   title: string;
@@ -43,6 +55,11 @@ export interface Program {
   applicationMode?: 'standard' | 'hackathon';
   requireGithubAuth?: boolean;
   activeFormId?: string | null;
+  integrationSources?: {
+    resend?: string | null;
+    didit?: string | null;
+    payment?: string | null;
+  };
 }
 
 export interface Category {
@@ -109,6 +126,8 @@ export interface TeamMember {
   lastActive: string;
   avatar: string;
   joinedDate: string;
+  programScope?: 'organization' | 'program';
+  programId?: string | null;
 }
 
 // Judging criterion definition

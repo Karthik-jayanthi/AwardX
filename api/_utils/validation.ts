@@ -113,3 +113,8 @@ export const razorpayVerifySchema = z.object({
   razorpayPaymentId: z.string().trim().min(1),
   razorpaySignature: z.string().trim().min(1),
 });
+
+export const stripeVerifySchema = z.object({
+  sessionId: z.string().trim().min(1),
+  submissionId: z.string().uuid(),
+});

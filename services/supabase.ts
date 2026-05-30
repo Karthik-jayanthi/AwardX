@@ -61,6 +61,7 @@ type CachedOrganizationDetails = {
 let cachedUserContext: CachedUserContext | null = null;
 let cachedUserContextPromise: Promise<CachedUserContext> | null = null;
 let cachedOrganizationDetails: CachedOrganizationDetails | null = null;
+let activeOrganizationOverride: string | null = null;
 
 /** Clear invalid/expired auth tokens so the client stops calling /auth/v1/user with a bad JWT. */
 const clearStaleAuthSession = async () => {
@@ -116,29 +117,32 @@ const resolveUserContext = async (forceRefresh = false): Promise<CachedUserConte
       return next;
     }
 
-    let orgId: string | null = null;
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (!profileError && profile?.organization_id) {
-      orgId = profile.organization_id;
-    }
+    let orgId: string | null = activeOrganizationOverride;
 
     if (!orgId) {
-      const { data: membership } = await supabase
-        .from('organization_members')
-        .select('organization_id, joined_at')
-        .eq('user_id', userId)
-        .order('joined_at', { ascending: false })
-        .limit(1)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', userId)
         .maybeSingle();
-      orgId = membership?.organization_id || null;
 
-      if (orgId && (!profile || !profile.organization_id)) {
-        void supabase.from('profiles').update({ organization_id: orgId }).eq('id', userId);
+      if (!profileError && profile?.organization_id) {
+        orgId = profile.organization_id;
+      }
+
+      if (!orgId) {
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('organization_id, joined_at')
+          .eq('user_id', userId)
+          .order('joined_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        orgId = membership?.organization_id || null;
+
+        if (orgId && (!profile || !profile.organization_id)) {
+          void supabase.from('profiles').update({ organization_id: orgId }).eq('id', userId);
+        }
       }
     }
 
@@ -173,6 +177,19 @@ export const getCurrentOrgId = async (): Promise<string | null> => {
 export const clearUserCache = () => {
   cachedUserContext = null;
   cachedUserContextPromise = null;
+  cachedOrganizationDetails = null;
+  activeOrganizationOverride = null;
+};
+
+export const setActiveOrganization = (orgId: string | null) => {
+  activeOrganizationOverride = orgId;
+  if (cachedUserContext) {
+    cachedUserContext = {
+      ...cachedUserContext,
+      orgId,
+      fetchedAt: Date.now(),
+    };
+  }
   cachedOrganizationDetails = null;
 };
 
@@ -748,6 +765,60 @@ export const organizations = {
       .eq('id', id)
       .select()
       .single();
+    return { data, error };
+  },
+
+  listForUser: async () => {
+    if (!supabase) return { data: [], error: { message: 'Supabase not configured' } };
+
+    const userId = await getCurrentUserId();
+    if (!userId) return { data: [], error: { message: 'Not authenticated' } };
+
+    const orgIds = new Set<string>();
+
+    const { data: memberships, error: membershipError } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', userId);
+
+    if (membershipError) {
+      return { data: [], error: membershipError };
+    }
+
+    for (const row of memberships || []) {
+      if (row.organization_id) orgIds.add(row.organization_id);
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profile?.organization_id) {
+      orgIds.add(profile.organization_id);
+    }
+
+    if (orgIds.size === 0) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .select(`
+        id,
+        name,
+        slug,
+        logo_url,
+        website,
+        industry,
+        plan,
+        created_at,
+        programs(count)
+      `)
+      .in('id', Array.from(orgIds))
+      .order('name');
+
     return { data, error };
   },
 };

@@ -1,6 +1,8 @@
+import type { NextFunction, Response } from 'express';
 import { getSupabaseAdmin } from '../supabase.js';
+import type { AuthenticatedRequest } from './auth.js';
 
-const ALLOWED_ROLE_NAMES = new Set(['admin', 'program manager']);
+const ALLOWED_ROLE_NAMES = new Set(['admin', 'program manager', 'owner']);
 const ALLOWED_PERMISSION_KEYS = new Set(['manage_programs', 'manage_judging']);
 
 type ProgramRow = {
@@ -92,4 +94,28 @@ export async function ensureCanManageProgram(userId: string, programId: string):
   }
 
   return { ok: true, program };
+}
+
+export function requireProgramManage(paramName = 'programId') {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const programId = req.params[paramName];
+    if (!programId) {
+      return res.status(400).json({ error: `${paramName} is required` });
+    }
+
+    if (!req.userId) {
+      return res.status(401).json({ error: 'Missing authenticated user' });
+    }
+
+    try {
+      const result = await ensureCanManageProgram(req.userId, programId);
+      if (!result.ok) {
+        return res.status(result.status).json({ error: result.error });
+      }
+      return next();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Authorization failed';
+      return res.status(500).json({ error: message });
+    }
+  };
 }

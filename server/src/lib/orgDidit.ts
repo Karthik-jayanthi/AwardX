@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '../supabase.js';
+import { resolveDiditApiBaseUrl } from './diditUrl.js';
 
 export type DiditIntegration = {
   connected: boolean;
@@ -26,7 +27,7 @@ export async function getOrgDiditIntegration(organizationId: string): Promise<Di
   return {
     connected: !!(data?.connected && data?.api_key_encrypted) || !!envKey,
     apiKey,
-    apiBaseUrl: config.apiBaseUrl || process.env.DIDIT_API_BASE_URL || 'https://verification.didit.me',
+    apiBaseUrl: resolveDiditApiBaseUrl(config.apiBaseUrl || process.env.DIDIT_API_BASE_URL),
     webhookSecret: config.webhookSecret || process.env.DIDIT_WEBHOOK_SECRET || null,
   };
 }
@@ -45,7 +46,7 @@ export async function getDiditForProgram(programId: string): Promise<DiditIntegr
       organizationId: null,
       connected: !!envKey,
       apiKey: envKey || null,
-      apiBaseUrl: process.env.DIDIT_API_BASE_URL || 'https://verification.didit.me',
+      apiBaseUrl: resolveDiditApiBaseUrl(process.env.DIDIT_API_BASE_URL),
       webhookSecret: process.env.DIDIT_WEBHOOK_SECRET || null,
     };
   }

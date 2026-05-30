@@ -3,6 +3,7 @@ import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from './DashboardLayout';
 import { EventSelectionView } from './EventSelectionView';
+import { OrganizationSelectionView } from './OrganizationSelectionView';
 import { DashboardOverview } from './DashboardOverview';
 import { FormBuilderView } from './FormBuilderView';
 import { SubmissionTable } from './SubmissionTable';
@@ -18,9 +19,10 @@ import { ProgramDetailsView } from './ProgramDetailsView';
 import { PageBuilder } from './builder/PageBuilder';
 import { CustomGridView } from './CustomGridView';
 import { motion } from 'framer-motion';
-import { Program } from '../../services/models';
+import { Program, Organization } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
 import { auth } from '../../services/supabase';
+import { resolveAllowedDashboardView } from '../../lib/dashboardViews';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { PublishedLockBanner } from './PublishedLockBanner';
 import { ProgramTileHub } from './ProgramTileHub';
@@ -47,6 +49,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+  const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [activeEvent, setActiveEvent] = useState<Program | null>(null);
   const [currentView, setCurrentView] = useState('overview');
   const [awardsViewMode, setAwardsViewMode] = useState<AwardsViewMode>('workflow');
@@ -71,30 +74,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           const urlProgram = searchParams.get('program');
 
           if (!cancelled && (urlView === 'settings' || urlTab === 'billing' || urlTab === 'integrations')) {
-            setCurrentView('settings');
+            if (databaseService.hasPermission('manage_settings')) {
+              setCurrentView('settings');
+            }
           } else if (!cancelled && urlView) {
-            setCurrentView(urlView);
+            setCurrentView(resolveAllowedDashboardView(urlView, (p) => databaseService.hasPermission(p)));
           }
 
-          const [{ user }, programs] = await Promise.all([
-            auth.getUser(),
-            databaseService.getPrograms(),
-          ]);
+          const { user } = await auth.getUser();
+          if (!user) return;
 
-          if (user) {
-            // URL program param takes priority over persisted workspace
-            if (urlProgram) {
-              const fromUrl = programs.find(p => p.id === urlProgram);
-              if (!cancelled && fromUrl) setActiveEvent(fromUrl);
-            } else {
-              const { data: ws } = await workspaceState.get(user.id);
-              if (ws) {
-                if (!cancelled && ws.current_view && !urlView) setCurrentView(ws.current_view);
-                if (ws.active_program_id) {
-                  const restored = programs.find(p => p.id === ws.active_program_id);
-                  if (!cancelled && restored) setActiveEvent(restored);
-                }
-              }
+          const organizations = await databaseService.getUserOrganizations();
+          const { data: ws } = await workspaceState.get(user.id);
+          const savedOrgId = (ws?.preferences as Record<string, unknown> | undefined)?.active_organization_id;
+          const savedOrg =
+            typeof savedOrgId === 'string'
+              ? organizations.find((org) => org.id === savedOrgId)
+              : undefined;
+
+          let selectedOrg = savedOrg || (organizations.length === 1 ? organizations[0] : undefined);
+          if (selectedOrg) {
+            await databaseService.setActiveOrganization(selectedOrg.id);
+            if (!cancelled) setActiveOrganization(selectedOrg);
+          }
+
+          const programs = selectedOrg ? await databaseService.getPrograms() : [];
+
+          if (urlProgram) {
+            const fromUrl = programs.find((p) => p.id === urlProgram);
+            if (!cancelled && fromUrl) setActiveEvent(fromUrl);
+          } else if (ws) {
+            if (!cancelled && ws.current_view && !urlView) {
+              setCurrentView(resolveAllowedDashboardView(ws.current_view, (p) => databaseService.hasPermission(p)));
+            }
+            if (ws.active_program_id) {
+              const restored = programs.find((p) => p.id === ws.active_program_id);
+              if (!cancelled && restored) setActiveEvent(restored);
             }
           }
         };
@@ -274,6 +289,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     );
   }
 
+  if (!activeOrganization) {
+    return (
+      <motion.div
+        key="organization-hub"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <OrganizationSelectionView
+          onSelectOrganization={setActiveOrganization}
+          onLogout={onLogout}
+        />
+      </motion.div>
+    );
+  }
+
   if (!activeEvent) {
     return (
       <motion.div
@@ -283,7 +314,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         exit={{ opacity: 0 }}
       >
         <EventSelectionView
+          activeOrganization={activeOrganization}
           onSelectEvent={setActiveEvent}
+          onSwitchOrganization={() => {
+            setActiveEvent(null);
+            setActiveOrganization(null);
+          }}
           onLogout={onLogout}
         />
       </motion.div>

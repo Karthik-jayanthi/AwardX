@@ -71,11 +71,24 @@ router.post('/:programId', requireAuth, async (req, res) => {
 
     const payload = req.body || {};
     const supabase = getSupabaseAdmin();
+
+    const { data: existing } = await supabase
+      .from('program_forms')
+      .select('*')
+      .eq('program_id', programId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      return res.json({ data: existing });
+    }
+
     const { data, error } = await supabase
       .from('program_forms')
       .insert({
         program_id: programId,
-        title: payload.title,
+        title: payload.title || 'Submission Form',
         description: payload.description || null,
         is_active: payload.is_active ?? false,
       })
@@ -202,17 +215,45 @@ router.put('/:formId/fields', requireAuth, async (req, res) => {
     }
 
     const supabase = getSupabaseAdmin();
-    const { error: deleteError } = await supabase
-      .from('program_form_fields')
-      .delete()
-      .eq('form_id', formId);
 
-    if (deleteError) {
-      return res.status(500).json({ error: deleteError.message || 'Failed to reset form fields' });
+    const incomingIds = fields
+      .map((field: any) => field.id)
+      .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+
+    if (incomingIds.length > 0) {
+      const { data: existingFields } = await supabase
+        .from('program_form_fields')
+        .select('id')
+        .eq('form_id', formId);
+
+      const staleIds = (existingFields || [])
+        .map((row) => row.id)
+        .filter((id) => !incomingIds.includes(id));
+
+      if (staleIds.length > 0) {
+        const { error: staleDeleteError } = await supabase
+          .from('program_form_fields')
+          .delete()
+          .in('id', staleIds);
+
+        if (staleDeleteError) {
+          return res.status(500).json({ error: staleDeleteError.message || 'Failed to remove stale form fields' });
+        }
+      }
+    } else {
+      const { error: deleteError } = await supabase
+        .from('program_form_fields')
+        .delete()
+        .eq('form_id', formId);
+
+      if (deleteError) {
+        return res.status(500).json({ error: deleteError.message || 'Failed to reset form fields' });
+      }
     }
 
     if (fields.length > 0) {
       const payload = fields.map((field: any, index: number) => ({
+        ...(typeof field.id === 'string' && field.id ? { id: field.id } : {}),
         form_id: formId,
         label: field.label,
         type: field.type,
@@ -221,12 +262,12 @@ router.put('/:formId/fields', requireAuth, async (req, res) => {
         sort_order: field.sort_order ?? index,
       }));
 
-      const { error: insertError } = await supabase
+      const { error: upsertError } = await supabase
         .from('program_form_fields')
-        .insert(payload);
+        .upsert(payload, { onConflict: 'id' });
 
-      if (insertError) {
-        return res.status(500).json({ error: insertError.message || 'Failed to save form fields' });
+      if (upsertError) {
+        return res.status(500).json({ error: upsertError.message || 'Failed to save form fields' });
       }
     }
 
