@@ -136,10 +136,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync state → URL + persist
+  // Sync active program + persist (view changes should not reload permissions)
   useEffect(() => {
     databaseService.setActiveProgram(activeEvent?.id || null);
+  }, [activeEvent?.id]);
 
+  useEffect(() => {
     // Update URL to reflect current state
     const params = new URLSearchParams();
     if (activeEvent?.id) params.set('program', activeEvent.id);

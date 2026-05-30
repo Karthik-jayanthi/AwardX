@@ -650,6 +650,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const refreshPermissions = async () => {
+      if (!activeEvent?.id) return;
+      await databaseService.setActiveProgram(activeEvent.id);
+      if (cancelled) return;
+      const loadedPerms = Object.values(PERMISSIONS).filter((p) => databaseService.hasPermission(p));
+      setUserPermissions(loadedPerms);
+      setPermissionsReady(true);
+    };
+
+    void refreshPermissions();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeEvent?.id]);
+
+  useEffect(() => {
     const fetchCategories = async () => {
       if (!activeEvent) {
         setCategories([]);
@@ -713,7 +731,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return userPermissions.includes(requiredPermission);
   };
 
-  const filterNav = (items: any[]) => items.filter(item => databaseService.hasPermission(item.permission) && canAccess(item.permission));
+  const filterNav = (items: any[]) => {
+    if (!permissionsReady) {
+      return items;
+    }
+    return items.filter((item) => databaseService.hasPermission(item.permission) && canAccess(item.permission));
+  };
 
   const visibleLeftNav = filterNav(leftNavItems);
   const visibleRightNav = filterNav(rightNavItems);

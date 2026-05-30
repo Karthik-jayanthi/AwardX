@@ -593,9 +593,6 @@ class DatabaseService {
   }
 
   private async refreshPermissionCache() {
-    this.cachedPermissions = null;
-    this.cachedRoleName = null;
-    this.permissionsLoaded = false;
     if (!supabase) return;
 
     const { user } = await auth.getUser();
@@ -606,6 +603,8 @@ class DatabaseService {
       if (org?.id) this.currentOrgId = org.id;
     }
     if (!this.currentOrgId) {
+      this.cachedPermissions = new Set();
+      this.cachedRoleName = null;
       this.permissionsLoaded = true;
       return;
     }
@@ -623,18 +622,58 @@ class DatabaseService {
       return;
     }
 
-    // Find membership
-    let memberQuery = supabase
-      .from('organization_members')
-      .select('role_id')
-      .eq('organization_id', this.currentOrgId)
-      .eq('user_id', user.id);
+    // Prefer event-scoped membership, fall back to org-wide (program_id IS NULL).
+    let member: { role_id: string | null } | null = null;
+
     if (this.currentProgramId) {
-      memberQuery = memberQuery.eq('program_id', this.currentProgramId);
+      const { data: programMember } = await supabase
+        .from('organization_members')
+        .select('role_id')
+        .eq('organization_id', this.currentOrgId)
+        .eq('user_id', user.id)
+        .eq('program_id', this.currentProgramId)
+        .maybeSingle();
+
+      member = programMember;
+
+      if (!member?.role_id) {
+        const { data: orgWideMember } = await supabase
+          .from('organization_members')
+          .select('role_id')
+          .eq('organization_id', this.currentOrgId)
+          .eq('user_id', user.id)
+          .is('program_id', null)
+          .maybeSingle();
+
+        member = orgWideMember;
+      }
+    } else {
+      const { data: orgMember } = await supabase
+        .from('organization_members')
+        .select('role_id')
+        .eq('organization_id', this.currentOrgId)
+        .eq('user_id', user.id)
+        .is('program_id', null)
+        .maybeSingle();
+
+      member = orgMember;
+
+      if (!member?.role_id) {
+        const { data: anyMember } = await supabase
+          .from('organization_members')
+          .select('role_id')
+          .eq('organization_id', this.currentOrgId)
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+
+        member = anyMember;
+      }
     }
-    const { data: member } = await memberQuery.maybeSingle();
 
     if (!member?.role_id) {
+      this.cachedPermissions = new Set();
+      this.cachedRoleName = null;
       this.permissionsLoaded = true;
       return;
     }
