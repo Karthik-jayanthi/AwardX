@@ -25,36 +25,21 @@ interface SavedForm {
   createdAt: string;
 }
 
-const ensureMandatoryAwardSelector = (
+const syncAwardSelectorOptions = (
   fields: FormField[],
-  pages: FormPage[],
   awardOptions: string[],
 ): FormField[] => {
-  const firstPageId = pages[0]?.id || 'page-1';
   const options = awardOptions.length > 0 ? awardOptions : ['General'];
-  const existing = fields.find((field) => field.type === 'award_selector');
-
-  const mandatoryAwardField: FormField = existing
-    ? {
-        ...existing,
-        label: existing.label || 'Award Selection',
-        placeholder: existing.placeholder || 'Select award category...',
-        required: true,
-        pageId: existing.pageId || firstPageId,
-        options,
-      }
-    : {
-        id: `field-award-selector-${Date.now()}`,
-        type: 'award_selector',
-        label: 'Award Selection',
-        placeholder: 'Select award category...',
-        required: true,
-        options,
-        pageId: firstPageId,
-      };
-
-  const nonAwardFields = fields.filter((field) => field.type !== 'award_selector');
-  return [mandatoryAwardField, ...nonAwardFields];
+  return fields.map((field) =>
+    field.type === 'award_selector'
+      ? {
+          ...field,
+          label: field.label || 'Award Selection',
+          placeholder: field.placeholder || 'Select award category...',
+          options,
+        }
+      : field,
+  );
 };
 
 const mapDbFieldToFormField = (f: any): FormField => {
@@ -103,7 +88,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   const [copiedFormId, setCopiedFormId] = useState<string | null>(null);
   const [awardOptions, setAwardOptions] = useState<string[]>([]);
   const [elementsPanelOpen, setElementsPanelOpen] = useState(true);
-  const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(true);
+  const [propertiesPanelOpen, setPropertiesPanelOpen] = useState(false);
   const [activeFormId, setActiveFormId] = useState<string | null>(null);
   const [isLoadingForms, setIsLoadingForms] = useState(true);
 
@@ -205,7 +190,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     // Prevent duplicate saves
     if (isSaving) return;
 
-    const normalizedFields = ensureMandatoryAwardSelector(fields, pages, awardOptions);
+    const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
     setCurrentForm(normalizedFields);
     setCurrentPages(pages);
     setCurrentTheme(theme);
@@ -245,7 +230,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
     setSaveMessage(null);
     try {
       // Save the form first
-      const normalizedFields = ensureMandatoryAwardSelector(fields, pages, awardOptions);
+      const normalizedFields = syncAwardSelectorOptions(fields, awardOptions);
       await db.updateForm(selectedFormId, { pages, theme, is_active: !targetForm.isActive });
       await db.replaceFormFields(selectedFormId, normalizedFields.map(mapFormFieldToDbPayload));
       if (!targetForm.isActive && activeEvent?.id) {
@@ -279,7 +264,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
       });
 
       await db.updateForm((newForm as any).id, { pages: currentPages, theme: currentTheme });
-      const normalizedFields = ensureMandatoryAwardSelector(currentForm, currentPages, awardOptions);
+      const normalizedFields = syncAwardSelectorOptions(currentForm, awardOptions);
       await db.replaceFormFields((newForm as any).id, normalizedFields.map(mapFormFieldToDbPayload));
 
       setFormName('');
@@ -297,7 +282,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
   };
 
   const handleLoadForm = (form: SavedForm) => {
-    const normalizedFields = ensureMandatoryAwardSelector(form.fields, form.pages || currentPages || [], awardOptions);
+    const normalizedFields = syncAwardSelectorOptions(form.fields, awardOptions);
     setCurrentForm(normalizedFields);
     setCurrentPages(form.pages || []);
     setCurrentTheme(form.theme);
@@ -431,6 +416,7 @@ export const FormBuilderView: React.FC<FormBuilderViewProps> = ({ activeEvent })
               propertiesPanelOpen={propertiesPanelOpen}
               onElementsPanelOpenChange={setElementsPanelOpen}
               onPropertiesPanelOpenChange={setPropertiesPanelOpen}
+              awardOptions={awardOptions}
             />
           ) : null}
         </div>

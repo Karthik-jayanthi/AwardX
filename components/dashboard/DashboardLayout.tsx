@@ -173,7 +173,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   onScheduleRepresentationChange,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -762,17 +762,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <div className="fixed top-0 left-0 w-full h-1 bg-amber-400 z-[60]" />
       )}
 
-      {/* LEFT SIDEBAR - Desktop */}
+      {/* LEFT SIDEBAR - Desktop (collapsed by default, expands on hover) */}
       <aside
         role="navigation"
         aria-label="Dashboard navigation"
-        className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out ${isLeftCollapsed ? 'w-20' : 'w-64'
-          }`}
+        onMouseEnter={() => setIsSidebarExpanded(true)}
+        onMouseLeave={() => setIsSidebarExpanded(false)}
+        className={`hidden lg:flex flex-col fixed inset-y-0 left-0 z-40 bg-white border-r border-slate-200 transition-all duration-200 ease-out ${
+          isSidebarExpanded ? 'w-64 shadow-lg' : 'w-20'
+        }`}
       >
         {/* Header / Logo / Event Switcher */}
-        <div className={`h-auto min-h-[5rem] flex flex-col border-b border-slate-50 transition-all ${isLeftCollapsed ? 'items-center py-4' : 'p-4'}`}>
+        <div className={`h-auto min-h-[5rem] flex flex-col border-b border-slate-50 transition-all ${!isSidebarExpanded ? 'items-center py-4' : 'p-4'}`}>
           {/* Back to Hub Button */}
-          {!isLeftCollapsed && (
+          {isSidebarExpanded && (
             <button
               onClick={onSwitchEvent}
               className="flex items-center text-xs font-bold text-slate-400 hover:text-indigo-600 mb-4 transition-colors group"
@@ -780,8 +783,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <ArrowLeft className="w-3 h-3 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Hub
             </button>
           )}
-          {isLeftCollapsed && (
-            <button onClick={onSwitchEvent} className="mb-4 text-slate-400 hover:text-indigo-600"><ArrowLeft className="w-4 h-4" /></button>
+          {!isSidebarExpanded && (
+            <button onClick={onSwitchEvent} className="mb-4 text-slate-400 hover:text-indigo-600" title="Back to Hub"><ArrowLeft className="w-4 h-4" /></button>
           )}
 
           {/* Active Event Display */}
@@ -789,7 +792,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <div className="w-9 h-9 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            {!isLeftCollapsed && (
+            {isSidebarExpanded && (
               <div className="overflow-hidden">
                 <div className="font-display tracking-tight text-sm font-bold text-slate-900 truncate leading-tight">
                   {activeEvent?.title || 'Active Event'}
@@ -802,7 +805,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto py-6 px-3 scrollbar-hide">
-          {!isLeftCollapsed && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3 font-display">Event Operations</div>}
+          {isSidebarExpanded && <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3 font-display">Event Operations</div>}
 
           {visibleLeftNav.map((item) => {
             if (item.id === 'awards' && onAwardsViewModeChange) {
@@ -812,7 +815,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   label={item.label}
                   icon={item.icon}
                   currentView={currentView}
-                  collapsed={isLeftCollapsed}
+                  collapsed={!isSidebarExpanded}
                   awardsViewMode={awardsViewMode}
                   onNavigate={() => onChangeView('awards')}
                   onToggleCanvas={() =>
@@ -830,7 +833,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   label={item.label}
                   icon={item.icon}
                   currentView={currentView}
-                  collapsed={isLeftCollapsed}
+                  collapsed={!isSidebarExpanded}
                   holdHint={holdHintForScheduleMode(scheduleRepresentation)}
                   onNavigate={() => onChangeView('schedule-rounds')}
                   onHoldToggle={() =>
@@ -849,7 +852,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 label={item.label}
                 icon={item.icon}
                 currentView={currentView}
-                collapsed={isLeftCollapsed}
+                collapsed={!isSidebarExpanded}
                 onClick={() => onChangeView(item.id)}
               />
             );
@@ -857,7 +860,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
           {visibleRightNav.length > 0 && (
             <>
-              {!isLeftCollapsed && (
+              {isSidebarExpanded && (
                 <div className="mt-6 mb-4 px-3 text-xs font-bold text-slate-400 uppercase tracking-wider font-display">Workspace Tools</div>
               )}
 
@@ -868,7 +871,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   label={item.label}
                   icon={item.icon}
                   currentView={currentView}
-                  collapsed={isLeftCollapsed}
+                  collapsed={!isSidebarExpanded}
                   onClick={() => onChangeView(item.id)}
                 />
               ))}
@@ -878,7 +881,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* User Profile (Left Bottom) */}
         <div className="p-3 border-t border-slate-100 relative group">
-          <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${isLeftCollapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
+          <div className={`bg-slate-50/80 rounded-xl p-2 border border-slate-100 transition-all cursor-pointer hover:bg-slate-100 ${!isSidebarExpanded ? 'flex justify-center' : 'flex items-center gap-3'}`}>
             {currentUser.avatar ? (
               <img
                 src={currentUser.avatar}
@@ -890,7 +893,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 {currentUser.name?.charAt(0).toUpperCase() || 'U'}
               </div>
             )}
-            {!isLeftCollapsed && (
+            {isSidebarExpanded && (
               <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="text-sm font-bold text-slate-900 truncate font-display">{currentUser.name}</div>
                 <div className="text-xs text-indigo-600 font-medium truncate">{currentUser.role}</div>
@@ -899,6 +902,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
 
           {/* User Switcher Dropdown (For Demo Purposes) */}
+          {isSidebarExpanded && (
           <div className="absolute bottom-full left-0 w-64 bg-white rounded-xl shadow-2xl border border-slate-100 p-2 mb-2 hidden group-hover:block z-50">
             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">Switch Persona (Demo)</div>
             {allUsers.map(u => (
@@ -918,34 +922,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </button>
             ))}
           </div>
+          )}
 
           <button
             onClick={onLogout}
-            className={`w-full flex items-center mt-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors group ${isLeftCollapsed ? 'justify-center p-2' : 'gap-3 px-3 py-2'
+            className={`w-full flex items-center mt-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors group ${!isSidebarExpanded ? 'justify-center p-2' : 'gap-3 px-3 py-2'
               }`}
             title="Sign Out"
           >
             <LogOut className="w-5 h-5 group-hover:text-red-500 transition-colors" />
-            {!isLeftCollapsed && <span>Sign Out</span>}
+            {isSidebarExpanded && <span>Sign Out</span>}
           </button>
         </div>
-
-        {/* Toggle Button */}
-        <button
-          onClick={() => setIsLeftCollapsed(!isLeftCollapsed)}
-          className="absolute -right-3 top-24 bg-white border border-slate-200 rounded-full p-1 shadow-sm text-slate-400 hover:text-indigo-600 z-50"
-        >
-          {isLeftCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-        </button>
       </aside>
 
 
       {/* MAIN CONTENT AREA */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out min-h-screen relative
-          ${isLeftCollapsed ? 'lg:pl-20' : 'lg:pl-64'} 
-          lg:pr-0
-        `}
+        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out min-h-screen relative lg:pl-20 lg:pr-0`}
       >
         {/* Top Header Mobile/Desktop Mix */}
         {!hideHeader && (
@@ -955,7 +949,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             currentView={currentView}
             unreadCount={unreadCount}
             isLive={!isTestMode}
-            compact={isLeftCollapsed}
+            compact
             searchValue={searchQuery}
             onSearchChange={(value) => {
               setSearchQuery(value);

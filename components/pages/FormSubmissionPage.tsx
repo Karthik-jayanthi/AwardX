@@ -25,36 +25,21 @@ const defaultTheme: FormTheme = {
   fontFamily: 'Inter, sans-serif',
 };
 
-const ensureMandatoryAwardSelectorField = (
+const syncAwardSelectorOptions = (
   fields: FormField[],
-  pages: FormPage[],
   awardOptions: string[],
 ): FormField[] => {
-  const firstPageId = pages[0]?.id || 'page-1';
   const options = awardOptions.length > 0 ? awardOptions : ['General'];
-  const existing = fields.find((field) => field.type === 'award_selector');
-
-  const mandatoryField: FormField = existing
-    ? {
-        ...existing,
-        label: existing.label || 'Award Selection',
-        placeholder: existing.placeholder || 'Select award category...',
-        required: true,
-        options,
-        pageId: existing.pageId || firstPageId,
-      }
-    : {
-        id: `award-selector-mandatory-${Date.now()}`,
-        type: 'award_selector',
-        label: 'Award Selection',
-        placeholder: 'Select award category...',
-        required: true,
-        options,
-        pageId: firstPageId,
-      };
-
-  const nonAwardFields = fields.filter((field) => field.type !== 'award_selector');
-  return [mandatoryField, ...nonAwardFields];
+  return fields.map((field) =>
+    field.type === 'award_selector'
+      ? {
+          ...field,
+          label: field.label || 'Award Selection',
+          placeholder: field.placeholder || 'Select award category...',
+          options,
+        }
+      : field,
+  );
 };
 
 const buildHierarchicalAwardOptions = (rows: Array<{ id: string; title: string; parent_id: string | null }>) => {
@@ -361,7 +346,7 @@ export const FormSubmissionPage: React.FC = () => {
             };
           });
           const pages = form.pages || [{ id: 'page-1', title: 'Page 1', order: 0 }];
-          const normalizedFields = ensureMandatoryAwardSelectorField(mappedFields, pages, awardOptions);
+          const normalizedFields = syncAwardSelectorOptions(mappedFields, awardOptions);
           setFormFields(normalizedFields);
 
           // Prefill identity fields where labels/types match and values are empty.

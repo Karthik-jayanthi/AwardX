@@ -58,6 +58,7 @@ interface FormBuilderProps {
   propertiesPanelOpen?: boolean;
   onElementsPanelOpenChange?: (open: boolean) => void;
   onPropertiesPanelOpenChange?: (open: boolean) => void;
+  awardOptions?: string[];
 }
 
 export interface FormBuilderRef {
@@ -121,9 +122,10 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   paymentConfigured = false,
   paymentProvider,
   elementsPanelOpen = true,
-  propertiesPanelOpen = true,
+  propertiesPanelOpen = false,
   onElementsPanelOpenChange,
   onPropertiesPanelOpenChange,
+  awardOptions = [],
 }, ref) => {
   const { confirm: confirmDialog, ConfirmDialogNode } = useConfirm();
 
@@ -275,12 +277,12 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
       label: fieldDef?.label || 'New Field',
       placeholder: '',
       helpText: '',
-      required: type === 'award_selector',
+      required: false,
       pageId: selectedPageId,
       ...(type === 'select' || type === 'radio' || type === 'checkbox'
         ? { options: ['Option 1', 'Option 2', 'Option 3'] }
         : type === 'award_selector'
-        ? { options: ['Best Picture', 'Best Director', 'Best Actor'] }
+        ? { options: awardOptions.length > 0 ? awardOptions : ['General'] }
         : {}),
     };
     setFields(prev => [...prev, newField]);
@@ -293,10 +295,6 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
   };
 
   const deleteField = (id: string, e?: React.MouseEvent) => {
-    const targetField = fields.find((field) => field.id === id);
-    if (targetField?.type === 'award_selector') {
-      return;
-    }
     e?.stopPropagation();
     pushHistory();
     setFields(prev => prev.filter(f => f.id !== id));
@@ -576,7 +574,6 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
               {activeFields.map((field, index) => {
                 const isDragging = draggedFieldId === field.id;
                 const isDragOver = dragOverIndex === index && !isDragging;
-                const isMandatoryAwardField = field.type === 'award_selector';
                 
                 return (
                 <motion.div
@@ -653,11 +650,10 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (isMandatoryAwardField) return;
                               updateField(field.id, { required: !field.required });
                             }}
-                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'} ${isMandatoryAwardField ? 'cursor-not-allowed opacity-70' : ''}`}
-                            title={isMandatoryAwardField ? 'Award Selection is mandatory' : field.required ? 'Mark optional' : 'Mark required'}
+                            className={`p-1.5 rounded-md shadow-sm transition-all text-xs font-semibold ${field.required ? 'bg-red-50 text-red-500' : 'hover:text-orange-600 hover:bg-orange-50'}`}
+                            title={field.required ? 'Mark optional' : 'Mark required'}
                           >
                             <span className="text-[10px] px-0.5">{field.required ? 'REQ' : 'OPT'}</span>
                           </button>
@@ -692,9 +688,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                               </button>
                             </>
                           )}
-                          {!isMandatoryAwardField && (
-                            <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                          )}
+                          <button onClick={(e) => deleteField(field.id, e)} className="p-1.5 hover:text-red-500 hover:bg-white rounded-md shadow-sm transition-all" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       )}
             </div>
@@ -753,7 +747,7 @@ export const FormBuilder = forwardRef<FormBuilderRef, FormBuilderProps>(({
                         {field.type === 'award_selector' && (
                           <div className="pt-2 border-t border-slate-100">
                             <p className="text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-2.5 py-2 font-medium">
-                              Award Selection is mandatory and is synced from program award categories.
+                              Award options are synced from program award categories. Toggle REQ/OPT to make this field required or optional.
                             </p>
                           </div>
                         )}
