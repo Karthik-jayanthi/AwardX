@@ -274,11 +274,10 @@ export const PublicVotingRoundSection: React.FC<PublicVotingRoundSectionProps> =
                   </div>
                   <button
                     type="button"
-                    disabled={!diditConnected}
                     onClick={() => onKycEnabledChange(!kycEnabled)}
                     className={`relative h-5 w-10 flex-shrink-0 rounded-full transition-colors ${
                       kycEnabled ? 'bg-violet-600' : 'bg-slate-200'
-                    } ${!diditConnected ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    }`}
                   >
                     <div
                       className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
@@ -293,7 +292,7 @@ export const PublicVotingRoundSection: React.FC<PublicVotingRoundSectionProps> =
                     <a href="/dashboard?view=settings&tab=integrations" className="font-semibold underline">
                       Settings → Integrations
                     </a>{' '}
-                    first.
+                    to finalize setup.
                   </p>
                 )}
               </div>

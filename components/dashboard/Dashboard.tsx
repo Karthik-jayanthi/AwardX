@@ -17,7 +17,7 @@ import { ScheduleView } from './ScheduleView';
 import { SubmissionProcessView } from './SubmissionProcessView';
 import { ProgramDetailsView } from './ProgramDetailsView';
 import { PageBuilder } from './builder/PageBuilder';
-import { CustomGridView } from './CustomGridView';
+
 import { motion } from 'framer-motion';
 import { Program, Organization } from '../../services/models';
 import { db as databaseService, workspaceState } from '../../services/database';
@@ -214,8 +214,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return <ProgramTileHub activeEvent={activeEvent} onNavigate={setCurrentView} />;
       case 'overview':
         return <DashboardOverview activeEvent={activeEvent} onNavigate={setCurrentView} />;
-      case 'custom-grid':
-        return <CustomGridView />;
+
       case 'builder':
         return activeEvent ? <PageBuilder programId={activeEvent.id} /> : null;
 

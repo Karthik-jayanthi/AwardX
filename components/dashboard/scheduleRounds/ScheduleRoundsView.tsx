@@ -29,7 +29,7 @@ import {
   previewAdvancement,
   type AdvancementPreview,
 } from '../../../services/roundPipelineApi';
-import { createDefaultRound, shortlistConfigToCriteria } from '../../../lib/roundScheduleUtils';
+import { createDefaultRound, shortlistConfigToCriteria, buildLinearEdges } from '../../../lib/roundScheduleUtils';
 import type { AdvancementCriteria } from '../../../types/scheduleRounds';
 import { AddRoundSheet } from './AddRoundSheet';
 
@@ -283,9 +283,9 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       const normalized = await enforceNominationFirst(filtered);
       setRounds(normalized);
 
-      const nextEdges = roundEdges.filter(
-        (edge) => edge.sourceRoundId !== roundId && edge.targetRoundId !== roundId,
-      );
+      const nextEdges = activeEvent && representation === 'tiles'
+        ? buildLinearEdges(activeEvent.id, normalized)
+        : roundEdges.filter((edge) => edge.sourceRoundId !== roundId && edge.targetRoundId !== roundId);
       setRoundEdges(nextEdges);
 
       try {
@@ -307,7 +307,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
 
       setSelectedRoundId((prev) => (prev === roundId ? null : prev));
     },
-    [activeEvent, persistWorkflowEdges, roundEdges, rounds, enforceNominationFirst],
+    [activeEvent, representation, persistWorkflowEdges, roundEdges, rounds, enforceNominationFirst],
   );
 
   const handleRoundReorder = useCallback(
@@ -323,12 +323,17 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
             }),
           ),
         );
+
+        if (activeEvent && representation === 'tiles') {
+          const newEdges = buildLinearEdges(activeEvent.id, normalized);
+          await persistWorkflowEdges(newEdges, normalized);
+        }
       } catch (error) {
         console.error('Failed to persist round order:', error);
         toast.error('Could not save round order');
       }
     },
-    [enforceNominationFirst],
+    [activeEvent, representation, enforceNominationFirst, persistWorkflowEdges],
   );
 
   const openAddRoundSheet = useCallback(() => {
@@ -341,8 +346,16 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
       setIsCreatingRound(true);
       try {
         const newRound = createDefaultRound(activeEvent.id, rounds.length, name, type);
-        await handleRoundUpdate(newRound);
-        setSelectedRoundId(newRound.id);
+        const updatedRound = await handleRoundUpdate(newRound);
+
+        if (representation === 'tiles') {
+          const updatedRounds = [...rounds.filter((r) => r.id !== newRound.id), updatedRound];
+          const normalized = await enforceNominationFirst(updatedRounds);
+          const newEdges = buildLinearEdges(activeEvent.id, normalized);
+          await persistWorkflowEdges(newEdges, normalized);
+        }
+
+        setSelectedRoundId(updatedRound.id);
         setAddRoundOpen(false);
         toast.success(`Round "${name}" created`);
       } catch (error) {
@@ -352,7 +365,7 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         setIsCreatingRound(false);
       }
     },
-    [activeEvent, rounds.length, handleRoundUpdate],
+    [activeEvent, representation, rounds, handleRoundUpdate, enforceNominationFirst, persistWorkflowEdges],
   );
 
   const openConversionDialog = useCallback(

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Users, FileCheck, DollarSign, Clock, Calendar, Download, Plus, ChevronDown, LayoutTemplate, CheckCircle2, AlertCircle, ChevronRight, Search } from 'lucide-react';
+import { Users, FileCheck, Calendar, Download, Plus, ChevronDown, LayoutTemplate, CheckCircle2, AlertCircle, ChevronRight, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Program } from '../../services/models';
 import { db as databaseService } from '../../services/database';
@@ -14,28 +14,6 @@ interface DashboardOverviewProps {
   onNavigate?: (view: string) => void;
 }
 
-const StatCard = React.memo(({ title, value, change, isPositive, icon: Icon, color, onClick }: any) => (
-  <motion.button
-    type="button"
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    onClick={onClick}
-    className={`bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow text-left w-full ${onClick ? 'hover:border-indigo-200' : ''}`}
-  >
-    <div className="flex justify-between items-start mb-4">
-      <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
-        <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
-      </div>
-      <div className={`flex items-center text-sm font-semibold ${isPositive ? 'text-green-600' : 'text-red-600'} bg-opacity-10 px-2 py-1 rounded-full ${isPositive ? 'bg-green-50' : 'bg-red-50'}`}>
-        {isPositive ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
-        {change}
-      </div>
-    </div>
-    <div className="text-slate-500 text-sm font-medium mb-1">{title}</div>
-    <div className="text-2xl font-bold text-slate-900">{value}</div>
-  </motion.button>
-));
-StatCard.displayName = 'StatCard';
 
 // ── Form Selector ─────────────────────────────────────────────────────────────
 const FormSelectorSection: React.FC<{ activeEvent: Program | null; onNavigate?: (v: string) => void }> = ({ activeEvent, onNavigate }) => {
@@ -279,51 +257,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
         </div>
       </div>
 
-      {/* ── Stats grid ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <SkeletonLoader key={i} className="h-36" />)
-        ) : (
-          <>
-            <StatCard
-              title={activeEvent?.type === 'Grants & Funding' || activeEvent?.type === 'Grant' ? 'Applications' : 'Total Submissions'}
-              value={stats.totalSubmissions}
-              change="+Demo"
-              isPositive={true}
-              icon={FileCheck}
-              color="text-indigo-600 bg-indigo-600"
-              onClick={() => onNavigate?.('submissions')}
-            />
-            <StatCard
-              title="Est. Revenue"
-              value={`$${stats.revenue}`}
-              change="+Demo"
-              isPositive={true}
-              icon={DollarSign}
-              color="text-emerald-600 bg-emerald-600"
-              onClick={() => onNavigate?.('program-details')}
-            />
-            <StatCard
-              title="Active Judges"
-              value={stats.activeJudges}
-              change="Online"
-              isPositive={true}
-              icon={Users}
-              color="text-purple-600 bg-purple-600"
-              onClick={() => onNavigate?.('judging')}
-            />
-            <StatCard
-              title="Pending Review"
-              value={stats.pendingReview}
-              change="Action Needed"
-              isPositive={false}
-              icon={Clock}
-              color="text-orange-600 bg-orange-600"
-              onClick={() => onNavigate?.('judging')}
-            />
-          </>
-        )}
-      </div>
 
       {/* ── Form selector + charts (two-column on large screens) ─────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

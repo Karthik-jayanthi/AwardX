@@ -94,6 +94,7 @@ describe('ScheduleRoundsView representation conversion', () => {
     window.localStorage.clear();
     mocks.updateRound.mockResolvedValue(buildRound('db-round-1', 0));
     mocks.getRounds.mockResolvedValue([buildRound('db-round-1', 0), buildRound('db-round-2', 1)]);
+    mocks.saveEdges.mockImplementation(async (_programId: string, edges: any) => edges);
   });
 
   it('does not rewrite edges while in block diagram mode', async () => {
@@ -116,7 +117,7 @@ describe('ScheduleRoundsView representation conversion', () => {
     expect(mocks.saveEdges).not.toHaveBeenCalled();
   });
 
-  it('does not rewrite connections when reordering tiles', async () => {
+  it('rewrites connections when reordering tiles', async () => {
     window.localStorage.setItem('awardx:schedule-representation:program-1', 'tiles');
     mocks.getEdges.mockResolvedValue([
       {
@@ -138,7 +139,7 @@ describe('ScheduleRoundsView representation conversion', () => {
     await waitFor(() => {
       expect(mocks.updateRound).toHaveBeenCalled();
     });
-    expect(mocks.saveEdges).not.toHaveBeenCalled();
+    expect(mocks.saveEdges).toHaveBeenCalled();
   });
 
   it('opens conversion dialog instead of switching views instantly', async () => {
