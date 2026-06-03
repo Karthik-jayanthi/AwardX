@@ -155,23 +155,28 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
     try {
       const submissions = await databaseService.getSubmissions(activeEvent?.id);
       if (!submissions || submissions.length === 0) {
+        toast.info('No submissions to export yet.');
         return;
       }
       const headers = ['Title', 'Category', 'Status', 'Applicant', 'Date'];
+      const escape = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const rows = submissions.map((s: any) => [
-        s.title || '', s.category || '', s.status || '', s.applicant || '', s.date || ''
+        s.title, s.category, s.status, s.applicant, s.date,
       ]);
-      const csv = [headers.join(','), ...rows.map(r => r.map((v: string) => `"${v.replace(/"/g, '""')}"`).join(','))].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
+      const csv = [headers.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `${activeEvent?.title || 'submissions'}-report.csv`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success(`Exported ${submissions.length} submission${submissions.length === 1 ? '' : 's'}.`);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Failed to export report.');
+      toast.error('Failed to export report.');
     }
   };
 

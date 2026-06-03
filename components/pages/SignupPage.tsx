@@ -221,12 +221,36 @@ export const SignupPage: React.FC = () => {
                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                  </button>
                </div>
-               <div className="flex gap-2 mt-2">
-                 {['bg-green-500', 'bg-green-500', 'bg-slate-200', 'bg-slate-200'].map((bg, i) => (
-                   <div key={i} className={`h-1 flex-1 rounded-full ${bg}`}></div>
-                 ))}
-               </div>
-               <p className="text-xs text-slate-500">Medium strength</p>
+               {(() => {
+                 const score = (() => {
+                   if (!password) return 0;
+                   let s = 0;
+                   if (password.length >= 8) s++;
+                   if (password.length >= 12) s++;
+                   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) s++;
+                   if (/\d/.test(password)) s++;
+                   if (/[^A-Za-z0-9]/.test(password)) s++;
+                   return Math.min(s, 4);
+                 })();
+                 const labels = ['', 'Very weak', 'Weak', 'Medium', 'Strong'];
+                 const colors = ['bg-slate-200', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+                 const textColors = ['text-slate-500', 'text-red-600', 'text-orange-600', 'text-yellow-600', 'text-green-600'];
+                 return (
+                   <>
+                     <div className="flex gap-2 mt-2">
+                       {[0, 1, 2, 3].map((i) => (
+                         <div
+                           key={i}
+                           className={`h-1 flex-1 rounded-full ${i < score ? colors[score] : 'bg-slate-200'}`}
+                         ></div>
+                       ))}
+                     </div>
+                     <p className={`text-xs ${textColors[score]}`}>
+                       {password ? `${labels[score]} strength` : 'Enter a password'}
+                     </p>
+                   </>
+                 );
+               })()}
              </div>
 
              <div className="flex items-center pt-2 pb-2">

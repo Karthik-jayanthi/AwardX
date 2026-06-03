@@ -3,7 +3,7 @@ import { auth, refreshUserCache, supabase } from '../services/supabase';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { consumePostAuthRedirect } from '../../lib/safeRedirect';
+import { consumePostAuthRedirect } from '../lib/safeRedirect';
 
 export const AuthCallback: React.FC = () => {
   const navigate = useNavigate();

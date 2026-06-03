@@ -48,7 +48,7 @@ export const FeatureScroll: React.FC = () => {
         <section className="py-20 bg-slate-50 overflow-hidden border-y border-slate-200/50">
              <div className="flex flex-col gap-8">
                 {/* Row 1 - Scroll Left */}
-                <div className="relative flex overflow-x-hidden group">
+                <div className="relative flex overflow-x-hidden">
                     <div className="animate-scroll flex space-x-8 px-4">
                         {[...row1, ...row1, ...row1, ...row1].map((item, idx) => (
                             <FeatureTag key={`r1-${idx}`} icon={item.icon} label={item.label} />
@@ -57,7 +57,7 @@ export const FeatureScroll: React.FC = () => {
                 </div>
 
                 {/* Row 2 - Scroll Right */}
-                <div className="relative flex overflow-x-hidden group">
+                <div className="relative flex overflow-x-hidden">
                     <div className="animate-scroll-reverse flex space-x-8 px-4">
                         {[...row2, ...row2, ...row2, ...row2].map((item, idx) => (
                             <FeatureTag key={`r2-${idx}`} icon={item.icon} label={item.label} />

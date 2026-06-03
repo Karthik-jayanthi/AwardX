@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../Button';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -11,7 +11,8 @@ import { supabase } from '../../services/supabase';
 import { PaymentConfig } from '../../services/models';
 import { getEffectivePaymentProgramId, normalizeIntegrationSources } from '../../lib/programIntegrations';
 import { storePostAuthRedirect, sanitizeRedirectPath } from '../../lib/safeRedirect';
-import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Award, ChevronDown, AlertCircle, Github, UploadCloud, X, FileIcon } from 'lucide-react';
+import { storage } from '../../services/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const defaultTheme: FormTheme = {
@@ -140,7 +141,6 @@ export const FormSubmissionPage: React.FC = () => {
   const [applicationMode, setApplicationMode] = useState<'standard' | 'hackathon'>('standard');
   const [requireGithubAuth, setRequireGithubAuth] = useState(false);
   const [kycEnabled, setKycEnabled] = useState(false);
-  const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
   const needsGithubApplication = applicationMode === 'hackathon' || requireGithubAuth;
 
@@ -476,14 +476,6 @@ export const FormSubmissionPage: React.FC = () => {
     setCurrentFieldIdx((prev) => Math.min(prev, Math.max(stepFields.length - 1, 0)));
   }, [stepFields.length]);
 
-  useEffect(() => {
-    return () => {
-      if (autoAdvanceTimeoutRef.current) {
-        window.clearTimeout(autoAdvanceTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const hasFieldValue = (value: any) => {
     if (Array.isArray(value)) return value.length > 0;
     if (typeof value === 'string') return value.trim().length > 0;
@@ -505,31 +497,11 @@ export const FormSubmissionPage: React.FC = () => {
     return true;
   };
 
-  const canAutoAdvanceField = (field: FormField, value: any) => {
-    if (isLastStep) return false;
-    if (field.type === 'textarea' || field.type === 'file') return false;
-    return hasFieldValue(value);
-  };
-
   const handleInputChange = (fieldId: string, value: any) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
     if (saveState !== 'saving') {
       setSaveState('idle');
     }
-
-    if (!currentField || currentField.id !== fieldId) return;
-    if (!canAutoAdvanceField(currentField, value)) return;
-
-    if (autoAdvanceTimeoutRef.current) {
-      window.clearTimeout(autoAdvanceTimeoutRef.current);
-    }
-
-    autoAdvanceTimeoutRef.current = window.setTimeout(() => {
-      setCurrentFieldIdx((prev) => {
-        if (prev >= stepCount - 1) return prev;
-        return prev + 1;
-      });
-    }, 450);
   };
 
   const handleNext = () => {
@@ -766,7 +738,7 @@ export const FormSubmissionPage: React.FC = () => {
               value={value}
               onChange={(e) => handleInputChange(field.id, e.target.value)}
               required={field.required}
-              className={`${inputBaseClass} appearance-none cursor-pointer pr-12 font-bold text-indigo-900 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100 focus:border-indigo-400`}
+              className={`${inputBaseClass} appearance-none cursor-pointer pr-20 font-bold text-indigo-900 bg-indigo-50/50 hover:bg-indigo-50 border-indigo-100 focus:border-indigo-400`}
               style={{ fontFamily: theme.fontFamily }}
             >
               <option value="">{field.placeholder || 'Select award category...'}</option>
@@ -780,11 +752,77 @@ export const FormSubmissionPage: React.FC = () => {
             </div>
           </div>
         );
+      case 'file': {
+        const fileState: { name?: string; url?: string; uploading?: boolean; error?: string } =
+          typeof value === 'object' && value !== null ? value : {};
+        return (
+          <div className="relative">
+            <input
+              type="file"
+              id={`file-${field.id}`}
+              className="sr-only"
+              required={field.required && !fileState.url}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                handleInputChange(field.id, { name: file.name, uploading: true });
+                const tempId = `temp-${Date.now()}`;
+                const { path, bucket, error } = await storage.uploadSubmissionFile(file, tempId);
+                if (error || !path) {
+                  handleInputChange(field.id, { error: (error as any)?.message || 'Upload failed' });
+                  toast.error('File upload failed: ' + ((error as any)?.message || 'Unknown error'));
+                  return;
+                }
+                const { data: urlData } = (supabase as any).storage.from(bucket || 'media').getPublicUrl(path);
+                handleInputChange(field.id, { name: file.name, url: urlData?.publicUrl || path });
+              }}
+            />
+            {fileState.url ? (
+              <div className="flex items-center gap-3 p-4 bg-indigo-50 border-2 border-indigo-200 rounded-[20px]">
+                <FileIcon className="w-6 h-6 text-indigo-500 flex-shrink-0" />
+                <span className="flex-1 text-sm font-medium text-indigo-900 truncate">{fileState.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleInputChange(field.id, '')}
+                  className="text-indigo-400 hover:text-indigo-700 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <label
+                htmlFor={`file-${field.id}`}
+                className="flex flex-col items-center justify-center gap-3 p-8 bg-[#F2F2F7] hover:bg-[#E5E5EA] border-2 border-dashed border-[#C7C7CC] hover:border-indigo-400 rounded-[20px] cursor-pointer transition-all duration-300"
+              >
+                {fileState.uploading ? (
+                  <>
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                    <span className="text-sm text-slate-500">Uploading…</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="w-8 h-8 text-slate-400" />
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-slate-700">
+                        {field.placeholder || 'Click to upload a file'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">SVG, PNG, JPG, PDF or GIF (max 10 MB)</p>
+                    </div>
+                    {fileState.error && (
+                      <p className="text-xs text-red-500">{fileState.error}</p>
+                    )}
+                  </>
+                )}
+              </label>
+            )}
+          </div>
+        );
+      }
       default:
         return (
           <input
             type={field.type}
-            value={value}
+            value={typeof value === 'string' ? value : ''}
             onChange={(e) => handleInputChange(field.id, e.target.value)}
             placeholder={field.placeholder}
             required={field.required}

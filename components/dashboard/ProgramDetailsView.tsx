@@ -4,7 +4,6 @@ import { db } from '../../services/database';
 import { PaymentConfig, Program } from '../../services/models';
 import { Button } from '../Button';
 import { Calendar, Image as ImageIcon, Type, Link as LinkIcon, Save, AlertCircle, CreditCard, DollarSign, CheckCircle } from 'lucide-react';
-import { AppDatePicker } from '../ui/AppDateFields';
 
 interface ProgramDetailsViewProps {
     activeEvent: Program | null;
@@ -115,11 +114,16 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
 
 
                         <div className="space-y-1">
-                            <AppDatePicker
-                                label="Deadline"
-                                value={formData.deadline || null}
-                                onChange={(deadline) => setFormData({ ...formData, deadline: deadline || '' })}
-                            />
+                            <label className="block text-sm font-semibold text-slate-700">Deadline</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    value={formData.deadline || ''}
+                                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                                    className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                />
+                            </div>
                         </div>
                     </div>
 
