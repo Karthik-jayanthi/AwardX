@@ -1,14 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Building2, LogOut, Bell, Search, RefreshCw, Plus, ArrowRight,
-  Sparkles, Layers, Calendar
+  Sparkles, Layers, Calendar, Gavel
 } from 'lucide-react';
 import { Organization } from '../../services/models';
 import { auth } from '../../services/supabase';
 import { db as databaseService } from '../../services/database';
 import { Modal } from '../Modal';
 import { Button } from '../Button';
+
+interface JudgeInviteRow {
+  judgeId: string;
+  status: string;
+  acceptedAt: string | null;
+  inviteToken: string;
+  program: {
+    id: string;
+    title: string;
+    slug?: string | null;
+    description?: string | null;
+    coverImageUrl?: string | null;
+    status?: string | null;
+    deadline?: string | null;
+    industryCategory?: string | null;
+  };
+  organization: { id: string; name: string; logoUrl?: string | null } | null;
+}
 
 interface UserData {
   name: string;
@@ -76,6 +95,8 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
     name: 'Loading...',
     avatar: '',
   });
+  const [judgeInvites, setJudgeInvites] = useState<JudgeInviteRow[]>([]);
+  const navigate = useNavigate();
 
   const filteredOrganizations = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -98,8 +119,12 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
     if (showLoading) setIsRefreshing(true);
     try {
       await databaseService.initialize();
-      const orgs = await databaseService.getUserOrganizations();
+      const [orgs, invites] = await Promise.all([
+        databaseService.getUserOrganizations(),
+        databaseService.getMyJudgeInvites(),
+      ]);
       setOrganizations(orgs);
+      setJudgeInvites(invites);
     } catch (error) {
       console.error('Failed to load organizations:', error);
     } finally {
@@ -208,6 +233,60 @@ export const OrganizationSelectionView: React.FC<OrganizationSelectionViewProps>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {judgeInvites.length > 0 && (
+          <section className="mb-10">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900 flex items-center gap-2">
+                  <Gavel className="w-5 h-5 text-indigo-600" /> Events you're invited to judge
+                </h2>
+                <p className="text-slate-500 text-sm mt-1">
+                  You've been invited as a judge on these events. Click to open your judging portal.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {judgeInvites.map((invite) => (
+                <motion.button
+                  key={invite.judgeId}
+                  whileHover={{ y: -2 }}
+                  onClick={() => navigate(`/judge/${invite.inviteToken}`)}
+                  className="text-left bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-sm transition-all group"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-11 h-11 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center border border-indigo-100">
+                      <Gavel className="w-5 h-5" />
+                    </div>
+                    <span className={`text-[11px] font-semibold px-2 py-1 rounded border ${
+                      invite.status === 'active'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {invite.status === 'active' ? 'Accepted' : 'Invited'}
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-1 group-hover:text-indigo-700 transition-colors">
+                    {invite.program.title}
+                  </h3>
+                  <p className="text-sm text-slate-500 mb-2 line-clamp-2">
+                    {invite.organization?.name || 'Award program'}
+                    {invite.program.industryCategory ? ` • ${invite.program.industryCategory}` : ''}
+                  </p>
+                  {invite.program.deadline && (
+                    <p className="text-xs text-slate-500 mb-3 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Deadline: {new Date(invite.program.deadline).toLocaleDateString()}
+                    </p>
+                  )}
+                  <div className="flex items-center text-xs font-semibold text-indigo-700 group-hover:translate-x-0.5 transition-transform">
+                    Open judging portal <ArrowRight className="w-3 h-3 ml-1" />
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
           <div className="mb-6">
             <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Your Organizations</h2>

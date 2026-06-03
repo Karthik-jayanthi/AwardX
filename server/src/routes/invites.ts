@@ -243,6 +243,260 @@ async function insertNotificationSafe(
 	}
 }
 
+async function handleVerifyJudge(req: any, res: any) {
+	try {
+		if (!isSupabaseConfigured()) {
+			return res.status(503).json({ error: 'Database not configured' });
+		}
+
+		const ip = getClientIp(req);
+		const rl = enforceRateLimit(`verify-judge:${ip}`, 20, 15 * 60 * 1000);
+		if (!rl.ok) {
+			res.setHeader('Retry-After', String(rl.retryAfterSeconds));
+			return res.status(429).json({ error: 'Rate limit exceeded. Try again later.' });
+		}
+
+		const tokenCandidate = req.method === 'GET'
+			? String(req.query?.token || '')
+			: String(req.body?.token || '');
+		const token = normalizeInviteToken(tokenCandidate);
+		if (!token) {
+			return res.status(400).json({ error: 'Invalid token format' });
+		}
+
+		const supabase = getSupabaseAdmin();
+
+		const { data: judge, error: judgeError } = await supabase
+			.from('judges')
+			.select('id, name, email, avatar_url, bio, status, program_id, organization_id, invite_token_used_at')
+			.eq('invite_token', token)
+			.single();
+
+		if (judgeError || !judge) {
+			return res.status(404).json({ error: 'Invalid or expired invite link. This link may have already been used.' });
+		}
+
+		if (!judge.invite_token_used_at) {
+			// First-time accept: mark active for this event only.
+			// Intentionally does NOT add to organization_members — judge access is scoped to the event.
+			const { error: updateError } = await supabase
+				.from('judges')
+				.update({
+					invite_token_used_at: new Date().toISOString(),
+					status: 'active',
+					accepted_at: new Date().toISOString(),
+				})
+				.eq('id', judge.id);
+
+			if (updateError) {
+				console.error('Failed to mark judge token as used:', updateError);
+				return res.status(500).json({ error: 'Failed to process invite' });
+			}
+		}
+
+		const [programResult, assignmentResult, criteriaResult, orgResult] = await Promise.all([
+			judge.program_id
+				? supabase
+						.from('programs')
+						.select('id, title, slug, description, cover_image_url, status, deadline, timezone, industry_category')
+						.eq('id', judge.program_id)
+						.single()
+				: Promise.resolve({ data: null }),
+			supabase
+				.from('submission_judges')
+				.select(`
+					id,
+					status,
+					completed_at,
+					assigned_at,
+					submission_id,
+					submissions (
+						id,
+						title,
+						description,
+						cover_image_url,
+						status,
+						category_id,
+						submitted_at,
+						applicant_name,
+						vote_count
+					)
+				`)
+				.eq('judge_id', judge.id)
+				.order('assigned_at', { ascending: false }),
+			judge.program_id
+				? supabase
+						.from('judging_criteria')
+						.select('id, name, description, weight, min_score, max_score, sort_order')
+						.eq('program_id', judge.program_id)
+						.order('sort_order')
+				: Promise.resolve({ data: [] }),
+			judge.organization_id
+				? supabase
+						.from('organizations')
+						.select('name')
+						.eq('id', judge.organization_id)
+						.single()
+				: Promise.resolve({ data: null }),
+		]);
+
+		const program: any = programResult.data;
+		let assignments: any[] = assignmentResult.data || [];
+		const criteria: any[] = criteriaResult.data || [];
+		const organizationName: string = (orgResult.data as any)?.name || '';
+
+		if (assignments.length > 0) {
+			const categoryIds = Array.from(new Set(
+				assignments.map((row: any) => row.submissions?.category_id).filter(Boolean),
+			));
+			let categoryMap = new Map<string, string>();
+			if (categoryIds.length > 0) {
+				const { data: categories } = await supabase
+					.from('categories')
+					.select('id, title')
+					.in('id', categoryIds);
+				categoryMap = new Map((categories || []).map((c: any) => [c.id, c.title]));
+			}
+			assignments = assignments.map((row: any) => ({
+				...row,
+				category_name: categoryMap.get(row.submissions?.category_id) || 'Uncategorized',
+			}));
+		}
+
+		return res.json({
+			ok: true,
+			judge: {
+				id: judge.id,
+				name: judge.name,
+				email: judge.email,
+				avatarUrl: judge.avatar_url,
+				bio: judge.bio,
+			},
+			program: program ? {
+				id: program.id,
+				title: program.title,
+				description: program.description,
+				coverImageUrl: program.cover_image_url,
+				status: program.status,
+				deadline: program.deadline,
+				timezone: program.timezone,
+				industryCategory: program.industry_category,
+			} : null,
+			organization: organizationName,
+			assignments: assignments.map((row: any) => ({
+				submissionJudgeId: row.id,
+				status: row.status,
+				completedAt: row.completed_at,
+				submission: row.submissions ? {
+					id: row.submissions.id,
+					title: row.submissions.title,
+					description: row.submissions.description,
+					coverImageUrl: row.submissions.cover_image_url,
+					status: row.submissions.status,
+					category: row.category_name || 'Uncategorized',
+					submittedAt: row.submissions.submitted_at,
+					applicantName: row.submissions.applicant_name,
+					voteCount: row.submissions.vote_count,
+				} : null,
+			})),
+			criteria: criteria.map((c: any) => ({
+				id: c.id,
+				name: c.name,
+				description: c.description,
+				weight: c.weight,
+				minScore: c.min_score,
+				maxScore: c.max_score,
+				sortOrder: c.sort_order,
+			})),
+		});
+	} catch (error: any) {
+		console.error('Verify judge error:', error);
+		return res.status(500).json({ error: error?.message || 'Internal server error' });
+	}
+}
+
+router.get('/verify-judge', handleVerifyJudge);
+router.post('/verify-judge', handleVerifyJudge);
+
+// List programs the authenticated user has been invited to judge (by email match).
+router.get('/my-judge-invites', async (req, res) => {
+	try {
+		if (!isSupabaseConfigured()) {
+			return res.status(503).json({ error: 'Database not configured' });
+		}
+
+		const authResult = await getAuthUser(req);
+		if (!authResult?.user) {
+			return res.status(401).json({ error: 'Authentication required' });
+		}
+
+		const email = String(authResult.user.email || '').toLowerCase().trim();
+		if (!email) {
+			return res.json({ ok: true, invites: [] });
+		}
+
+		const supabase = getSupabaseAdmin();
+		const { data: judgeRows, error: judgesErr } = await supabase
+			.from('judges')
+			.select('id, name, email, status, accepted_at, invite_token, program_id, organization_id')
+			.ilike('email', email);
+
+		if (judgesErr) {
+			return res.status(500).json({ error: judgesErr.message || 'Failed to load judge invites' });
+		}
+
+		const rows = judgeRows || [];
+		const programIds = Array.from(new Set(rows.map((r: any) => r.program_id).filter(Boolean)));
+		const orgIds = Array.from(new Set(rows.map((r: any) => r.organization_id).filter(Boolean)));
+
+		const [programsRes, orgsRes] = await Promise.all([
+			programIds.length > 0
+				? supabase
+						.from('programs')
+						.select('id, title, slug, description, cover_image_url, status, deadline, industry_category')
+						.in('id', programIds)
+				: Promise.resolve({ data: [] }),
+			orgIds.length > 0
+				? supabase.from('organizations').select('id, name, logo_url').in('id', orgIds)
+				: Promise.resolve({ data: [] }),
+		]);
+
+		const programMap = new Map<string, any>(((programsRes.data as any[]) || []).map((p) => [p.id, p]));
+		const orgMap = new Map<string, any>(((orgsRes.data as any[]) || []).map((o) => [o.id, o]));
+
+		const invites = rows.map((r: any) => {
+			const program = programMap.get(r.program_id) || null;
+			const organization = orgMap.get(r.organization_id) || null;
+			return {
+				judgeId: r.id,
+				status: r.status,
+				acceptedAt: r.accepted_at,
+				inviteToken: r.invite_token,
+				program: program ? {
+					id: program.id,
+					title: program.title,
+					slug: program.slug,
+					description: program.description,
+					coverImageUrl: program.cover_image_url,
+					status: program.status,
+					deadline: program.deadline,
+					industryCategory: program.industry_category,
+				} : null,
+				organization: organization ? {
+					id: organization.id,
+					name: organization.name,
+					logoUrl: organization.logo_url,
+				} : null,
+			};
+		}).filter((i: any) => i.program);
+
+		return res.json({ ok: true, invites });
+	} catch (err: any) {
+		console.error('my-judge-invites error:', err);
+		return res.status(500).json({ error: err?.message || 'Internal server error' });
+	}
+});
+
 router.get('/verify-team', async (req, res) => {
 	try {
 		if (!isSupabaseConfigured()) {

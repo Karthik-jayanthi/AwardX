@@ -1406,6 +1406,34 @@ class DatabaseService {
     };
   }
 
+  async getMyJudgeInvites(): Promise<Array<{
+    judgeId: string;
+    status: string;
+    acceptedAt: string | null;
+    inviteToken: string;
+    program: {
+      id: string;
+      title: string;
+      slug?: string | null;
+      description?: string | null;
+      coverImageUrl?: string | null;
+      status?: string | null;
+      deadline?: string | null;
+      industryCategory?: string | null;
+    };
+    organization: { id: string; name: string; logoUrl?: string | null } | null;
+  }>> {
+    try {
+      const headers = await this.getAuthenticatedHeaders();
+      const response = await fetch('/api/invites/my-judge-invites', { method: 'GET', headers });
+      const payload = await response.json();
+      if (!response.ok) return [];
+      return payload?.invites || [];
+    } catch {
+      return [];
+    }
+  }
+
   async withdrawMySubmission(submissionId: string, reason?: string): Promise<void> {
     const headers = await this.getAuthenticatedHeaders();
     const response = await fetch('/api/submissions/withdraw', {
