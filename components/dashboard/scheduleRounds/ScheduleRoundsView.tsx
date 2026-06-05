@@ -36,6 +36,22 @@ import { AddRoundSheet } from './AddRoundSheet';
 interface RoundCardInsight {
   participantTotal: number;
   participantAdvanced: number;
+  participants: Array<{
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    status: 'active' | 'advanced' | 'eliminated';
+    score?: number | null;
+    votes?: number;
+  }>;
+  judgeTotal: number;
+  judges: Array<{
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    email?: string;
+    scoreStatus: 'scored' | 'pending';
+  }>;
 }
 
 interface ScheduleRoundsViewProps {
@@ -173,17 +189,62 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
     try {
       const insightsEntries = await Promise.all(
         targetRounds.map(async (round): Promise<[string, RoundCardInsight]> => {
+          const empty: RoundCardInsight = { participantTotal: 0, participantAdvanced: 0, participants: [], judgeTotal: 0, judges: [] };
           if (round.id.startsWith('round-')) {
-            return [round.id, { participantTotal: 0, participantAdvanced: 0 }];
+            return [round.id, empty];
           }
 
           const { data, error } = await roundSubmissions.getByRound(round.id);
           if (error || !data) {
-            return [round.id, { participantTotal: 0, participantAdvanced: 0 }];
+            return [round.id, empty];
           }
 
-          const participantAdvanced = data.filter((row: { status?: string }) => row.status === 'advanced').length;
-          return [round.id, { participantTotal: data.length, participantAdvanced }];
+          const participantAdvanced = data.filter((row: any) => row.status === 'advanced').length;
+
+          const participants = data.map((row: any) => {
+            const sub = row.submissions;
+            const status: 'active' | 'advanced' | 'eliminated' =
+              row.status === 'advanced' ? 'advanced' : row.status === 'eliminated' ? 'eliminated' : 'active';
+            return {
+              id: sub?.id || row.submission_id || row.id,
+              name: sub?.applicant_name || sub?.title || 'Unknown',
+              avatarUrl: sub?.cover_image_url || undefined,
+              status,
+              score: sub?.average_score ?? null,
+              votes: sub?.votes_count ?? undefined,
+            };
+          });
+
+          // Collect unique judges from submission_judges
+          const judgeMap = new Map<string, { id: string; name: string; status: string }>();
+          for (const row of data) {
+            const sj = row.submissions?.submission_judges;
+            if (Array.isArray(sj)) {
+              for (const j of sj) {
+                if (j.judge_id && !judgeMap.has(j.judge_id)) {
+                  judgeMap.set(j.judge_id, {
+                    id: j.judge_id,
+                    name: j.judge_id,
+                    status: j.status || 'pending',
+                  });
+                }
+              }
+            }
+          }
+
+          const judges = Array.from(judgeMap.values()).map(j => ({
+            id: j.id,
+            name: j.name,
+            scoreStatus: (j.status === 'completed' ? 'scored' : 'pending') as 'scored' | 'pending',
+          }));
+
+          return [round.id, {
+            participantTotal: data.length,
+            participantAdvanced,
+            participants,
+            judgeTotal: judges.length,
+            judges,
+          }];
         }),
       );
 

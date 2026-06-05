@@ -14,6 +14,7 @@ export type EvaluatorStrategy =
   | 'assigned_judges'
   | 'random_assignment'
   | 'category_based'
+  | 'group_based'
   | 'custom';
 
 export type StartCondition =

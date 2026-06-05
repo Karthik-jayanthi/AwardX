@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import RoundType, { Round, EvaluationLogic, EvaluatorStrategy, StartCondition, EndCondition, EdgeCondition, ShortlistConfig, OutputPort } from '../../../types/scheduleRounds';
 import { X, Save, Trash2, Calendar, Users, Eye, EyeOff, Settings, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,6 +13,8 @@ import {
   type RoundVotingConfig,
 } from './PublicVotingRoundSection';
 import { supabase } from '../../../services/supabase';
+import { db } from '../../../services/database';
+import { queryKeys } from '../../../services/queryKeys';
 
 interface RoundConfigurationPanelProps {
   round: Round;
@@ -46,6 +49,14 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
   const [error, setError] = useState<string | null>(null);
   const [outputPortModalOpen, setOutputPortModalOpen] = useState(false);
   const [editingOutputPort, setEditingOutputPort] = useState<OutputPort | undefined>(undefined);
+
+  // Fetch judge groups for group_based strategy
+  const { data: judgeGroups = [] } = useQuery({
+    queryKey: queryKeys.judgeGroups.all(programId),
+    queryFn: () => db.getJudgeGroups(programId),
+    enabled: !!programId,
+    staleTime: 60_000,
+  });
 
   // Calculate available data streams from incoming edges
   // Each incoming edge represents ONE data stream
@@ -343,9 +354,29 @@ export const RoundConfigurationPanel: React.FC<RoundConfigurationPanelProps> = (
                   <option value="assigned_judges">Assigned Judges</option>
                   <option value="random_assignment">Random Assignment</option>
                   <option value="category_based">Category Based</option>
+                  <option value="group_based">Judge Group</option>
                   <option value="custom">Custom</option>
                 </select>
               </div>
+              {formData.evaluatorStrategy === 'group_based' && (
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-500 ml-1">Assign Judge Group</label>
+                  {judgeGroups.length === 0 ? (
+                    <p className="text-xs text-slate-400 px-1">No groups created yet. Create groups in Judging → Panel tab.</p>
+                  ) : (
+                    <select
+                      value={formData.metadata?.judgeGroupId || ''}
+                      onChange={(e) => handleChange('metadata', { ...formData.metadata, judgeGroupId: e.target.value || undefined })}
+                      className="w-full px-4 py-3 bg-white border border-slate-200/60 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 outline-none text-sm font-medium transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="">Select a group...</option>
+                      {judgeGroups.map(g => (
+                        <option key={g.id} value={g.id}>{g.name} ({g.judgeCount} judges)</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
               <button
                 onClick={() => handleChange('blindEvaluation', !formData.blindEvaluation)}
                 className={`w-full flex items-center justify-between p-3.5 rounded-xl border transition-all duration-300 ${formData.blindEvaluation ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border-slate-200/60 text-slate-700 hover:border-slate-300'}`}

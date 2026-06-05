@@ -356,6 +356,26 @@ async function handleVerifyJudge(req: any, res: any) {
 		const criteria: any[] = criteriaResult.data || [];
 		const organizationName: string = (orgResult.data as any)?.name || '';
 
+		// If no explicit assignments, fetch all program submissions for this judge
+		if (judge.program_id && assignments.length === 0) {
+			const { data: programSubs } = await supabase
+				.from('submissions')
+				.select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, vote_count')
+				.eq('program_id', judge.program_id)
+				.order('submitted_at', { ascending: false });
+
+			if (programSubs && programSubs.length > 0) {
+				assignments = programSubs.map((sub: any) => ({
+					id: `auto-${sub.id}`,
+					status: 'pending',
+					completed_at: null,
+					assigned_at: null,
+					submission_id: sub.id,
+					submissions: sub,
+				}));
+			}
+		}
+
 		if (assignments.length > 0) {
 			const categoryIds = Array.from(new Set(
 				assignments.map((row: any) => row.submissions?.category_id).filter(Boolean),
