@@ -19,6 +19,8 @@ interface JudgeScoringModalProps {
   onScored?: () => void;
   /** If true, only show this judge's scores (judge portal mode) */
   isJudgeView?: boolean;
+  /** Invite token for judge portal scoring (bypasses org auth) */
+  judgeToken?: string;
 }
 
 // Renders submitted form data from the submission_data jsonb field
@@ -87,6 +89,7 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   submissionJudgeId,
   onScored,
   isJudgeView = false,
+  judgeToken,
 }) => {
   const queryClient = useQueryClient();
   const { confirm, ConfirmDialogNode } = useConfirm();
@@ -183,8 +186,26 @@ export const JudgeScoringModal: React.FC<JudgeScoringModalProps> = ({
   }, [isOpen, submission?.id, effectiveSubmissionJudgeId, existingScores]);
 
   const submitMutation = useMutation({
-    mutationFn: (payload: { criteriaScores: CriterionScore[]; overallComment?: string }) => {
+    mutationFn: async (payload: { criteriaScores: CriterionScore[]; overallComment?: string }) => {
       if (!effectiveSubmissionJudgeId) throw new Error('No judge assignment found');
+
+      if (judgeToken) {
+        // Judge portal: use server endpoint that authenticates via token
+        const resp = await fetch('/api/scores/judge-submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: judgeToken,
+            submissionJudgeId: effectiveSubmissionJudgeId,
+            criteriaScores: payload.criteriaScores,
+            overallComment: payload.overallComment,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed to submit scores');
+        return data;
+      }
+
       return db.submitScores(
         effectiveSubmissionJudgeId,
         payload.criteriaScores,

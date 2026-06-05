@@ -209,6 +209,7 @@ export const JudgePortalPage: React.FC = () => {
         criteria={criteria}
         submissionJudgeId={selectedSubmissionJudgeId}
         isJudgeView={true}
+        judgeToken={resolvedToken || undefined}
         onScored={() => {
           setAssignments((prev) =>
             prev.map((assignment) =>
