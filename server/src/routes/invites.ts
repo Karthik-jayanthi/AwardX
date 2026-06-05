@@ -357,11 +357,12 @@ async function handleVerifyJudge(req: any, res: any) {
 		const organizationName: string = (orgResult.data as any)?.name || '';
 
 		// If no explicit assignments, fetch all program submissions for this judge
-		if (judge.program_id && assignments.length === 0) {
+		const effectiveProgramId = judge.program_id || program?.id;
+		if (effectiveProgramId && assignments.length === 0) {
 			const { data: programSubs } = await supabase
 				.from('submissions')
 				.select('id, title, description, cover_image_url, status, category_id, submitted_at, applicant_name, vote_count')
-				.eq('program_id', judge.program_id)
+				.eq('program_id', effectiveProgramId)
 				.order('submitted_at', { ascending: false });
 
 			if (programSubs && programSubs.length > 0) {
