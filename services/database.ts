@@ -6,6 +6,7 @@ import {
   auth,
   submissions,
   judges,
+  judgeGroups,
   roles,
   auditLogs,
   socialAccounts,
@@ -21,7 +22,7 @@ import {
 } from './supabase';
 import { getCurrentOrgId, getCurrentUserId } from './supabase';
 import { fetchBackendJson } from './backendApi';
-import { Program, Organization, Category, Round, Submission, Judge, Role, Log, SocialAccount, ScheduledPost, TeamMember, EventType } from './models';
+import { Program, Organization, Category, Round, Submission, Judge, JudgeGroup, Role, Log, SocialAccount, ScheduledPost, TeamMember, EventType } from './models';
 import { getTemplateConfig } from './templateRoundConfigs';
 import { normalizeIntegrationSources } from '../lib/programIntegrations';
 import { PageConfig, PageSection, Sponsor, FAQ, TimelineMilestone } from '../types/overviewPage';
@@ -1647,6 +1648,8 @@ class DatabaseService {
         : 0,
       assignedCount: j.assigned_count || 0,
       completedCount: j.completed_count || 0,
+      role: j.role || undefined,
+      groupId: j.judge_group_members?.[0]?.group_id || undefined,
     }));
   }
 
@@ -1670,7 +1673,7 @@ class DatabaseService {
 
     let query = supabase
       .from('judges')
-      .select('*', { count: 'exact' })
+      .select('*, judge_group_members(group_id)', { count: 'exact' })
       .eq('organization_id', orgId)
       .order('name');
 
@@ -1694,6 +1697,8 @@ class DatabaseService {
         : 0,
       assignedCount: j.assigned_count || 0,
       completedCount: j.completed_count || 0,
+      role: j.role || undefined,
+      groupId: j.judge_group_members?.[0]?.group_id || undefined,
     }));
 
     const total = count || 0;
@@ -1706,9 +1711,16 @@ class DatabaseService {
     };
   }
 
-  async createJudge(payload: { name: string; email: string; bio?: string; programId?: string }) {
-    const { data, error } = await judges.create(payload);
+  async createJudge(payload: { name: string; email: string; bio?: string; programId?: string; role?: string; groupId?: string }) {
+    const { groupId, ...createPayload } = payload;
+    const { data, error } = await judges.create(createPayload);
     if (error) throw new Error(error.message || 'Failed to add judge');
+
+    if (groupId && data?.id) {
+      const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
+      if (groupError) throw new Error(groupError.message || 'Failed to assign judge to group');
+    }
+
     await this.safeAuditLog({
       action: 'Added judge',
       actionType: 'create',
@@ -1719,9 +1731,16 @@ class DatabaseService {
     return data;
   }
 
-  async inviteJudge(payload: { name: string; email: string; programId?: string }): Promise<any> {
-    const { data, error } = await judges.invite(payload.email, payload.name, payload.programId);
-    if (error) throw new Error(error.message || 'Failed to invite judge');
+  async inviteJudge(payload: { name: string; email: string; programId?: string; role?: string; groupId?: string }): Promise<any> {
+    const { groupId, ...invitePayload } = payload;
+    const { data, error } = await judges.invite(invitePayload.email, invitePayload.name, invitePayload.programId, invitePayload.role);
+    if (error || !data) throw new Error(error?.message || 'Failed to invite judge');
+
+    if (groupId && data.id) {
+      const { error: groupError } = await judgeGroups.assignJudgeToGroup(data.id, groupId);
+      if (groupError) throw new Error(groupError.message || 'Failed to assign judge to group');
+    }
+
     await this.safeAuditLog({
       action: 'Invited judge',
       actionType: 'create',
@@ -1756,6 +1775,92 @@ class DatabaseService {
       details: programId ? `All judges removed from program ${programId}` : 'All judges removed',
       metadata: { programId },
     });
+  }
+
+  async getJudgeGroups(programId: string): Promise<JudgeGroup[]> {
+    if (!programId) return [];
+    const { data, error } = await judgeGroups.getAll(programId);
+    if (error || !data) return [];
+
+    return data.map((group: any) => ({
+      id: group.id,
+      programId: group.program_id,
+      name: group.name,
+      description: group.description || undefined,
+      createdAt: group.created_at,
+      judgeCount: (group.judge_group_members || []).length,
+    }));
+  }
+
+  async createJudgeGroup(payload: { programId: string; name: string; description?: string }) {
+    const { data, error } = await judgeGroups.create(payload);
+    if (error) throw new Error(error.message || 'Failed to create judge group');
+    await this.safeAuditLog({
+      action: 'Created judge group',
+      actionType: 'create',
+      resourceType: 'judge_group',
+      resourceId: (data as any)?.id,
+      details: payload.name,
+    });
+    return data;
+  }
+
+  async updateJudgeGroup(groupId: string, payload: { name: string; description?: string }) {
+    const { data, error } = await judgeGroups.update(groupId, payload);
+    if (error) throw new Error(error.message || 'Failed to update judge group');
+    await this.safeAuditLog({
+      action: 'Updated judge group',
+      actionType: 'update',
+      resourceType: 'judge_group',
+      resourceId: groupId,
+      details: payload.name,
+    });
+    return data;
+  }
+
+  async deleteJudgeGroup(groupId: string) {
+    const { error } = await judgeGroups.delete(groupId);
+    if (error) throw new Error(error.message || 'Failed to delete judge group');
+    await this.safeAuditLog({
+      action: 'Deleted judge group',
+      actionType: 'delete',
+      resourceType: 'judge_group',
+      resourceId: groupId,
+      details: `Group ${groupId} deleted`,
+    });
+  }
+
+  async getJudgesByGroup(groupId: string): Promise<Judge[]> {
+    const { data, error } = await judgeGroups.getJudgesByGroup(groupId);
+    if (error || !data) return [];
+
+    return data
+      .map((member: any) => member?.judge_id)
+      .filter(Boolean)
+      .map((j: any) => ({
+        id: j.id,
+        name: j.name,
+        avatar: resolveMediaPublicUrl(j.avatar_url),
+        email: j.email,
+        status: this.mapJudgeStatus(j.status) as Judge['status'],
+        progress: j.completed_count && j.assigned_count
+          ? Math.round((j.completed_count / j.assigned_count) * 100)
+          : 0,
+        assignedCount: j.assigned_count || 0,
+        completedCount: j.completed_count || 0,
+        role: j.role || undefined,
+        groupId,
+      }));
+  }
+
+  async assignJudgeToGroup(judgeId: string, groupId: string): Promise<void> {
+    const { error } = await judgeGroups.assignJudgeToGroup(judgeId, groupId);
+    if (error) throw new Error(error.message || 'Failed to assign judge to group');
+  }
+
+  async removeJudgeFromGroup(judgeId: string): Promise<void> {
+    const { error } = await judgeGroups.removeJudgeFromGroup(judgeId);
+    if (error) throw new Error(error.message || 'Failed to remove judge from group');
   }
 
   private mapJudgeStatus(status: string): string {

@@ -3,14 +3,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { db } from '../../services/database';
-import { Judge, Program, Submission, JudgingCriterion, TeamMember } from '../../services/models';
+import { Judge, JudgeGroup, Program, Submission, JudgingCriterion, TeamMember } from '../../services/models';
 import { Mail, Plus, Settings, Sliders, Trash2, Users, Calendar, UserX, Sparkles } from 'lucide-react';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { GroupCard } from './judgeGroups/GroupCard';
+import { CreateGroupModal } from './judgeGroups/CreateGroupModal';
+import { ViewGroupJudgesModal } from './judgeGroups/ViewGroupJudgesModal';
+import { AddJudgeToGroupModal } from './judgeGroups/AddJudgeToGroupModal';
 import { useConfirm } from '../ConfirmDialog';
 import { scheduleRoundsService } from '../../services/scheduleRoundsDb';
-import { sendJudgeInviteEmail, resendJudgeInvite } from '../../services/email';
+import { resendJudgeInvite } from '../../services/email';
 import { judgingCriteria, refreshUserCache, supabase, realtime } from '../../services/supabase';
 import { queryKeys } from '../../services/queryKeys';
 import { JudgeScoringModal } from './JudgeScoringModal';
@@ -33,12 +37,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const [selectedJudgesForBulk, setSelectedJudgesForBulk] = useState<string[]>([]);
    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
    const [replaceAssignments, setReplaceAssignments] = useState(false);
-   const [isJudgeModalOpen, setIsJudgeModalOpen] = useState(false);
-   const [judgeMode, setJudgeMode] = useState<'invite' | 'add'>('invite');
-   const [judgeForm, setJudgeForm] = useState({ name: '', email: '' });
-   const [isSavingJudge, setIsSavingJudge] = useState(false);
-   const [addingFromTeam, setAddingFromTeam] = useState(false);
-   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string | null>(null);
+   const [isAddJudgeModalOpen, setIsAddJudgeModalOpen] = useState(false);
+   const [addJudgeTargetGroup, setAddJudgeTargetGroup] = useState<JudgeGroup | null>(null);
+   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+   const [groupModalGroup, setGroupModalGroup] = useState<JudgeGroup | null>(null);
+   const [viewGroupModalOpen, setViewGroupModalOpen] = useState(false);
+   const [selectedGroup, setSelectedGroup] = useState<JudgeGroup | null>(null);
+   const [isSavingGroup, setIsSavingGroup] = useState(false);
    const [isRemovingJudge, setIsRemovingJudge] = useState<string | null>(null);
    const [isRemovingAll, setIsRemovingAll] = useState(false);
    const [resendingJudgeId, setResendingJudgeId] = useState<string | null>(null);
@@ -84,6 +89,13 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const { data: teamMembers = [] } = useQuery<TeamMember[]>({
       queryKey: queryKeys.teams.members(activeEvent?.id ?? ''),
       queryFn: () => db.getTeamMembers(activeEvent!.id),
+      enabled: !!activeEvent?.id,
+      staleTime: 30_000,
+   });
+
+   const { data: judgeGroups = [] } = useQuery<JudgeGroup[]>({
+      queryKey: queryKeys.judgeGroups.all(activeEvent?.id ?? ''),
+      queryFn: () => db.getJudgeGroups(activeEvent!.id),
       enabled: !!activeEvent?.id,
       staleTime: 30_000,
    });
@@ -254,6 +266,7 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
       if (!activeEvent?.id) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.submissions.all(activeEvent.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.judgeGroups.all(activeEvent.id) });
    }, [activeEvent?.id, queryClient]);
 
    // Realtime judging progress subscription
@@ -298,6 +311,78 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
          toast.error('Failed to remove judges. Please try again.');
       } finally {
          setIsRemovingAll(false);
+      }
+   };
+
+   const handleCreateOrUpdateGroup = async (payload: { name: string; description?: string }) => {
+      if (!activeEvent?.id) return;
+      setIsSavingGroup(true);
+      try {
+         if (groupModalGroup) {
+            await db.updateJudgeGroup(groupModalGroup.id, payload);
+            toast.success('Judge group updated');
+         } else {
+            await db.createJudgeGroup({ programId: activeEvent.id, ...payload });
+            toast.success('Judge group created');
+         }
+         queryClient.invalidateQueries({ queryKey: queryKeys.judgeGroups.all(activeEvent.id) });
+         queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
+         setIsGroupModalOpen(false);
+      } catch (error: any) {
+         console.error('Group save failed:', error);
+         toast.error(error?.message || 'Failed to save judge group.');
+         throw error;
+      } finally {
+         setIsSavingGroup(false);
+      }
+   };
+
+   const handleDeleteGroup = async (groupId: string) => {
+      const ok = await confirm({
+         title: 'Delete judge group?',
+         description: 'This will remove the group but retain judges. Judges will no longer be grouped.',
+         confirmLabel: 'Delete group',
+      });
+      if (!ok) return;
+      try {
+         await db.deleteJudgeGroup(groupId);
+         queryClient.invalidateQueries({ queryKey: queryKeys.judgeGroups.all(activeEvent?.id) });
+         queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent?.id) });
+         toast.success('Judge group deleted');
+      } catch (error) {
+         console.error('Failed to delete group:', error);
+         toast.error('Failed to delete judge group. Please try again.');
+      }
+   };
+
+   const handleOpenGroupView = (group: JudgeGroup) => {
+      setSelectedGroup(group);
+      setViewGroupModalOpen(true);
+   };
+
+   const handleRemoveJudgeFromGroup = async (judgeId: string) => {
+      if (!activeEvent?.id) return;
+      try {
+         await db.removeJudgeFromGroup(judgeId);
+         queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
+         queryClient.invalidateQueries({ queryKey: queryKeys.judgeGroups.all(activeEvent.id) });
+         toast.success('Judge removed from group');
+      } catch (error) {
+         console.error('Failed to remove judge from group:', error);
+         toast.error('Unable to remove judge from group.');
+      }
+   };
+
+   const handleMoveJudgeToGroup = async (judgeId: string, targetGroupId: string) => {
+      if (!activeEvent?.id) return;
+      try {
+         await db.assignJudgeToGroup(judgeId, targetGroupId);
+         queryClient.invalidateQueries({ queryKey: queryKeys.judges.all(activeEvent.id) });
+         queryClient.invalidateQueries({ queryKey: queryKeys.judgeGroups.all(activeEvent.id) });
+         toast.success('Judge moved to group');
+      } catch (error) {
+         console.error('Failed to move judge:', error);
+         toast.error('Unable to move judge to the selected group.');
       }
    };
 
@@ -386,14 +471,19 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
    const judgeDirectory = assignableJudges.length > 0 ? assignableJudges : allOrgJudges;
    const judgeNameById = new Map(judgeDirectory.map((judge) => [judge.id, judge.name]));
    const assignedSubmissions = submissions.filter((submission) => (submission.assignedJudges || []).length > 0);
-   const existingJudgeEmails = new Set(
-      judges
-         .map((judge) => String(judge.email || '').trim().toLowerCase())
-         .filter(Boolean),
-   );
-   const eligibleTeamMembers = teamMembers.filter(
-      (member) => !existingJudgeEmails.has(String(member.email || '').trim().toLowerCase()),
-   );
+   const groupNameById = new Map(judgeGroups.map((group) => [group.id, group.name]));
+
+   const groupStats = React.useMemo(() => {
+      const stats = new Map<string, { active: number; pending: number }>();
+      for (const judge of judges) {
+         if (!judge.groupId) continue;
+         const cur = stats.get(judge.groupId) ?? { active: 0, pending: 0 };
+         if (judge.status === 'Active' || judge.status === 'Completed') cur.active++;
+         else if (judge.status === 'Invited') cur.pending++;
+         stats.set(judge.groupId, cur);
+      }
+      return stats;
+   }, [judges]);
 
    useEffect(() => {
       if (judgesPage > judgeTotalPages) {
@@ -546,6 +636,67 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                </div>
             )}
             <div className="flex flex-col gap-3 lg:flex-row lg:justify-between lg:items-center">
+               <h2 className="text-lg font-bold text-slate-900">Judge Groups</h2>
+               <Button
+                  size="sm"
+                  variant="secondary"
+                  className="flex items-center justify-center gap-2 w-full lg:w-auto"
+                  onClick={() => {
+                     setGroupModalGroup(null);
+                     setIsGroupModalOpen(true);
+                  }}
+               >
+                  <Users className="w-4 h-4" /> Create Judge Group
+               </Button>
+            </div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div>
+                     <h3 className="text-sm font-semibold text-slate-900">Judge Groups</h3>
+                     <p className="text-sm text-slate-500">Organize judges into groups for program-level review.</p>
+                  </div>
+                  <Button
+                     size="sm"
+                     variant="outline"
+                     onClick={() => {
+                        setGroupModalGroup(null);
+                        setIsGroupModalOpen(true);
+                     }}
+                  >
+                     + New Group
+                  </Button>
+               </div>
+               {judgeGroups.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600 text-center">
+                     No judge groups yet. Create a group to organize judges by topic, stage, or expertise.
+                  </div>
+               ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                     {judgeGroups.map((group) => {
+                        const stats = groupStats.get(group.id) ?? { active: 0, pending: 0 };
+                        return (
+                           <GroupCard
+                              key={group.id}
+                              group={group}
+                              activeCount={stats.active}
+                              pendingCount={stats.pending}
+                              onAddJudge={() => {
+                                 setAddJudgeTargetGroup(group);
+                                 setIsAddJudgeModalOpen(true);
+                              }}
+                              onView={() => handleOpenGroupView(group)}
+                              onEdit={() => {
+                                 setGroupModalGroup(group);
+                                 setIsGroupModalOpen(true);
+                              }}
+                              onDelete={() => handleDeleteGroup(group.id)}
+                           />
+                        );
+                     })}
+                  </div>
+               )}
+            </div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:justify-between lg:items-center">
                <h2 className="text-lg font-bold text-slate-900">Judge Panel</h2>
                       <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
                            <Button
@@ -553,27 +704,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                               variant="outline"
                               className="flex items-center justify-center gap-2 w-full sm:w-auto"
                               onClick={() => {
-                                 setJudgeMode('add');
-                                 setJudgeForm({ name: '', email: '' });
-                                 setAddingFromTeam(false);
-                                 setSelectedTeamMemberId(null);
-                                 setIsJudgeModalOpen(true);
+                                 setAddJudgeTargetGroup(null);
+                                 setIsAddJudgeModalOpen(true);
                               }}
                            >
-                              <Plus className="w-4 h-4" /> Add Judge
-                           </Button>
-                           <Button
-                              size="sm"
-                              className="flex items-center justify-center gap-2 w-full sm:w-auto"
-                              onClick={() => {
-                                 setJudgeMode('invite');
-                                 setJudgeForm({ name: '', email: '' });
-                                 setAddingFromTeam(false);
-                                 setSelectedTeamMemberId(null);
-                                 setIsJudgeModalOpen(true);
-                              }}
-                           >
-                              <Mail className="w-4 h-4" /> Invite Judge
+                              <Plus className="w-4 h-4" /> Add / Invite Judge
                            </Button>
                            {judges.length > 0 && (
                               <Button
@@ -603,6 +738,11 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
                            <div>
                               <div className="font-bold text-slate-900">{judge.name}</div>
                               <div className="text-xs text-slate-500">{judge.email}</div>
+                              {judge.groupId && groupNameById.get(judge.groupId) && (
+                                 <div className="mt-2 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    {groupNameById.get(judge.groupId)}
+                                 </div>
+                              )}
                            </div>
                         </div>
                         <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
@@ -1069,177 +1209,42 @@ export const JudgingView: React.FC<JudgingViewProps> = ({ activeEvent }) => {
             </div>
          </Modal>
 
-         <Modal
-            isOpen={isJudgeModalOpen}
-            onClose={() => setIsJudgeModalOpen(false)}
-            title={judgeMode === 'invite' ? 'Invite Judge' : 'Add Judge'}
-         >
-            <form
-               onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!judgeForm.name.trim() || !judgeForm.email.trim()) return;
-                  setIsSavingJudge(true);
-                  try {
-                     if (judgeMode === 'invite') {
-                        const judgeData = await db.inviteJudge({
-                           name: judgeForm.name.trim(),
-                           email: judgeForm.email.trim(),
-                           programId: activeEvent?.id,
-                        });
-                        if ((judgeData as any)?.reused_existing) {
-                           toast.success('Existing judge found. Reassigned to this program.');
-                        }
-                        // Build magic link URL with the invite token
-                        const siteUrl = window.location.origin;
-                        const inviteToken = judgeData?.invite_token;
-                        if (!inviteToken) {
-                           throw new Error('Unable to generate invite link. Please try inviting again.');
-                        }
-                        const magicLinkUrl = `${siteUrl}/judge/${inviteToken}`;
-                        await sendJudgeInviteEmail({
-                           email: judgeForm.email.trim(),
-                           name: judgeForm.name.trim(),
-                           programTitle: activeEvent?.title || 'your workspace',
-                           organizationId: (judgeData as any)?.organization_id,
-                           programId: (judgeData as any)?.program_id || activeEvent?.id,
-                           inviteId: (judgeData as any)?.id,
-                           inviteUrl: magicLinkUrl,
-                        });
-                     } else {
-                        const judgeData = await db.createJudge({
-                           name: judgeForm.name.trim(),
-                           email: judgeForm.email.trim(),
-                           programId: activeEvent?.id,
-                        });
-                        if ((judgeData as any)?.reused_existing) {
-                           toast.success('Existing judge found. Reassigned to this program.');
-                        }
-                        // Also send email on "Add Judge"
-                        const siteUrl = window.location.origin;
-                        const inviteToken = judgeData?.invite_token;
-                        if (inviteToken) {
-                           const magicLinkUrl = siteUrl + '/judge/' + inviteToken;
-                           await sendJudgeInviteEmail({
-                              email: judgeForm.email.trim(),
-                              name: judgeForm.name.trim(),
-                              programTitle: activeEvent?.title || 'your workspace',
-                              organizationId: (judgeData as any)?.organization_id,
-                              programId: (judgeData as any)?.program_id || activeEvent?.id,
-                              inviteId: (judgeData as any)?.id,
-                              inviteUrl: magicLinkUrl,
-                           });
-                        }
-                     }
-                     refreshAll();
-                     setIsJudgeModalOpen(false);
-                     setJudgeForm({ name: '', email: '' });
-                     setSelectedTeamMemberId(null);
-                     setAddingFromTeam(false);
-                  } catch (error: any) {
-                     const message = String(error?.message || 'Failed to save judge');
-                     if (message.includes('judges_organization_id_email_key') || message.toLowerCase().includes('duplicate key')) {
-                        toast.error('This email is already added as a judge. Use Assign Judges to reassign existing judges.');
-                     } else {
-                        toast.error(message);
-                     }
-                  } finally {
-                     setIsSavingJudge(false);
-                  }
-               }}
-               className="space-y-4"
-            >
-               <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Name</label>
-                  <input
-                     type="text"
-                     value={judgeForm.name}
-                     onChange={(e) => setJudgeForm({ ...judgeForm, name: e.target.value })}
-                     className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                     required
-                  />
-               </div>
-               <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Email</label>
-                  <input
-                     type="email"
-                     value={judgeForm.email}
-                     onChange={(e) => setJudgeForm({ ...judgeForm, email: e.target.value })}
-                     className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                     required
-                  />
-               </div>
-               {judgeMode === 'add' && (
-                  <>
-                     <div className="border-t border-slate-200 pt-4">
-                        <div className="flex gap-2 mb-4">
-                           <button
-                              type="button"
-                              onClick={() => setAddingFromTeam(false)}
-                              className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
-                                 !addingFromTeam
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                              }`}
-                           >
-                              Add Manually
-                           </button>
-                           <button
-                              type="button"
-                              onClick={() => setAddingFromTeam(true)}
-                              className={`flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-all ${
-                                 addingFromTeam
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                              }`}
-                           >
-                              From Team
-                           </button>
-                        </div>
-                     </div>
-                     {addingFromTeam && eligibleTeamMembers.length > 0 && (
-                        <div>
-                           <label className="block text-sm font-semibold text-slate-700 mb-2">Select Team Member</label>
-                           <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-50">
-                              {eligibleTeamMembers.map((member) => (
-                                 <label key={member.memberId} className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors">
-                                    <input
-                                       type="radio"
-                                       name="teamMember"
-                                       value={member.memberId}
-                                       checked={selectedTeamMemberId === member.memberId}
-                                       onChange={(e) => {
-                                          setSelectedTeamMemberId(e.target.value);
-                                          setJudgeForm({ name: member.name, email: member.email });
-                                       }}
-                                       className="w-4 h-4 text-indigo-600"
-                                    />
-                                    <div className="flex-1">
-                                       <div className="font-medium text-slate-900">{member.name}</div>
-                                       <div className="text-xs text-slate-500">{member.email}</div>
-                                    </div>
-                                    <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded">{member.role}</span>
-                                 </label>
-                              ))}
-                           </div>
-                        </div>
-                     )}
-                     {addingFromTeam && eligibleTeamMembers.length === 0 && (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                           All team members are already added as judges.
-                        </div>
-                     )}
-                  </>
-               )}
-               <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                  <Button type="button" variant="ghost" onClick={() => setIsJudgeModalOpen(false)}>
-                     Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSavingJudge}>
-                     {isSavingJudge ? 'Saving...' : judgeMode === 'invite' ? 'Send Invite' : 'Add Judge'}
-                  </Button>
-               </div>
-            </form>
-         </Modal>
+         <AddJudgeToGroupModal
+            isOpen={isAddJudgeModalOpen}
+            onClose={() => setIsAddJudgeModalOpen(false)}
+            targetGroup={addJudgeTargetGroup}
+            judgeGroups={judgeGroups}
+            judges={judges}
+            teamMembers={teamMembers}
+            programId={activeEvent?.id ?? ''}
+            programTitle={activeEvent?.title ?? 'your workspace'}
+            onDone={refreshAll}
+         />
+
+         <CreateGroupModal
+            isOpen={isGroupModalOpen}
+            onClose={() => {
+               setIsGroupModalOpen(false);
+               setGroupModalGroup(null);
+            }}
+            onSave={handleCreateOrUpdateGroup}
+            existingGroups={judgeGroups}
+            initialGroup={groupModalGroup}
+            isSaving={isSavingGroup}
+         />
+
+         <ViewGroupJudgesModal
+            isOpen={viewGroupModalOpen}
+            onClose={() => {
+               setViewGroupModalOpen(false);
+               setSelectedGroup(null);
+            }}
+            group={selectedGroup}
+            judges={selectedGroup ? judges.filter((judge) => judge.groupId === selectedGroup.id) : []}
+            groups={judgeGroups}
+            onRemove={handleRemoveJudgeFromGroup}
+            onMove={handleMoveJudgeToGroup}
+         />
     </div>
   );
 };

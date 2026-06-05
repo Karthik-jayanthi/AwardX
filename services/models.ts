@@ -117,8 +117,18 @@ export interface Judge {
   progress: number;
   assignedCount: number;
   completedCount: number;
+  role?: string;
+  groupId?: string;
 }
 
+export interface JudgeGroup {
+  id: string;
+  programId: string;
+  name: string;
+  description?: string;
+  createdAt?: string;
+  judgeCount: number;
+}
 
 
 // Organization/team member (comes from `organization_members` + `profiles` + `roles`)

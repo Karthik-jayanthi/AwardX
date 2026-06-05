@@ -17,6 +17,9 @@ export const queryKeys = {
   judges: {
     all: (programId: string) => ['judges', programId] as const,
   },
+  judgeGroups: {
+    all: (programId: string) => ['judge-groups', programId] as const,
+  },
   judging: {
     criteria: (programId: string) => ['judging', 'criteria', programId] as const,
     scores: (submissionId: string) => ['judging', 'scores', submissionId] as const,

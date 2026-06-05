@@ -1635,7 +1635,7 @@ export const judges = {
 
     let query = supabase
       .from('judges')
-      .select('*')
+      .select('*, judge_group_members(group_id)')
       .eq('organization_id', orgId)
       .order('name');
     if (programId) {
@@ -1669,13 +1669,25 @@ export const judges = {
     email: string;
     bio?: string;
     programId?: string;
+    role?: string;
+    status?: string;
   }) => {
-    const { programId, ...judgePayload } = judge;
+    const { programId, status, ...judgePayload } = judge;
     const org = await organizations.getCurrent();
+
+    const normalizedEmail = (judgePayload.email || '').trim().toLowerCase();
+    let existingProfile: any = null;
+    if (normalizedEmail) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', normalizedEmail)
+        .maybeSingle();
+      existingProfile = profile || null;
+    }
 
     // Reuse existing judge in this organization when the email already exists.
     // This avoids duplicate-key errors and lets invite/add flows behave idempotently.
-    const normalizedEmail = (judgePayload.email || '').trim().toLowerCase();
     if (org.data?.id && normalizedEmail) {
       const { data: existingJudge } = await supabase
         .from('judges')
@@ -1685,14 +1697,21 @@ export const judges = {
         .maybeSingle();
 
       if (existingJudge) {
-        // Reassign judge to the current program when needed.
+        const updatedPayload: any = {};
         if (programId && existingJudge.program_id !== programId) {
+          updatedPayload.program_id = programId;
+        }
+        if (judgePayload.role && judgePayload.role !== existingJudge.role) {
+          updatedPayload.role = judgePayload.role;
+        }
+        if (!existingJudge.user_id && existingProfile?.id) {
+          updatedPayload.user_id = existingProfile.id;
+        }
+
+        if (Object.keys(updatedPayload).length > 0) {
           const { data: updatedJudge, error: updateError } = await supabase
             .from('judges')
-            .update({
-              program_id: programId,
-              name: existingJudge.name || judgePayload.name,
-            })
+            .update(updatedPayload)
             .eq('id', existingJudge.id)
             .eq('organization_id', org.data.id)
             .select('*, invite_token')
@@ -1706,22 +1725,29 @@ export const judges = {
       }
     }
 
+    const insertPayload: any = {
+      ...judgePayload,
+      email: normalizedEmail || judgePayload.email,
+      organization_id: org.data?.id,
+      program_id: programId || null,
+      role: judgePayload.role || null,
+      user_id: existingProfile?.id || null,
+      status: status || 'active',
+      invited_at: status === 'invited' ? new Date().toISOString() : null,
+      accepted_at: status === 'active' ? new Date().toISOString() : null,
+    };
+
     const { data, error } = await supabase
       .from('judges')
-      .insert({
-        ...judgePayload,
-        email: normalizedEmail || judgePayload.email,
-        organization_id: org.data?.id,
-        program_id: programId || null,
-      })
+      .insert(insertPayload)
       .select('*, invite_token')
       .single();
     return { data, error };
   },
 
-  invite: async (email: string, name: string, programId?: string) => {
+  invite: async (email: string, name: string, programId?: string, role?: string) => {
     // Create/reuse judge record first.
-    const { data, error } = await judges.create({ name, email, programId });
+    const { data, error } = await judges.create({ name, email, programId, role });
     if (error || !data?.id) {
       return { data, error };
     }
@@ -1793,6 +1819,75 @@ export const judges = {
     let deleteQuery = supabase.from('judges').delete().eq('organization_id', orgId);
     if (programId) deleteQuery = deleteQuery.eq('program_id', programId);
     const { error } = await deleteQuery;
+    return { error };
+  },
+};
+
+export const judgeGroups = {
+  getAll: async (programId?: string) => {
+    if (!programId) return { data: [], error: null };
+
+    const { data, error } = await supabase
+      .from('judge_groups')
+      .select('*, judge_group_members(judge_id)')
+      .eq('program_id', programId)
+      .order('sort_order');
+    return { data, error };
+  },
+
+  create: async (group: { programId: string; name: string; description?: string }) => {
+    const { data, error } = await supabase
+      .from('judge_groups')
+      .insert({
+        program_id: group.programId,
+        name: group.name,
+        description: group.description || null,
+      })
+      .select('*')
+      .single();
+    return { data, error };
+  },
+
+  update: async (groupId: string, group: { name: string; description?: string }) => {
+    const { data, error } = await supabase
+      .from('judge_groups')
+      .update({
+        name: group.name,
+        description: group.description || null,
+      })
+      .eq('id', groupId)
+      .select('*')
+      .single();
+    return { data, error };
+  },
+
+  delete: async (groupId: string) => {
+    const { error } = await supabase.from('judge_groups').delete().eq('id', groupId);
+    return { error };
+  },
+
+  getJudgesByGroup: async (groupId: string) => {
+    if (!groupId) return { data: [], error: null };
+
+    const { data, error } = await supabase
+      .from('judge_group_members')
+      .select('judge_id(*)')
+      .eq('group_id', groupId);
+    return { data, error };
+  },
+
+  assignJudgeToGroup: async (judgeId: string, groupId: string) => {
+    await supabase.from('judge_group_members').delete().eq('judge_id', judgeId);
+    const { data, error } = await supabase
+      .from('judge_group_members')
+      .insert({ judge_id: judgeId, group_id: groupId })
+      .select('*')
+      .single();
+    return { data, error };
+  },
+
+  removeJudgeFromGroup: async (judgeId: string) => {
+    const { error } = await supabase.from('judge_group_members').delete().eq('judge_id', judgeId);
     return { error };
   },
 };
