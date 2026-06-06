@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Category } from '../../services/models';
 import { layoutCategoryTree } from '../../lib/categoryHierarchy';
-import { ZoomIn, ZoomOut, X, Maximize2, Plus } from 'lucide-react';
+import { ZoomIn, ZoomOut, X, Maximize2, Plus, Trash2 } from 'lucide-react';
 
 interface WorkflowProps {
     categories: Category[];
     onAddSub: (parentId: string) => void;
+    onDelete: (id: string) => void;
+    selectedIds: string[];
+    onToggleSelect: (id: string) => void;
     programId?: string;
 }
 
@@ -22,7 +25,7 @@ interface Edge {
     target: string;
 }
 
-export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddSub, programId }) => {
+export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddSub, onDelete, selectedIds, onToggleSelect, programId }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [nodes, setNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
@@ -314,9 +317,26 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                             <div className="absolute left-0 top-1/2 -translate-x-1/2 w-3 h-3 bg-slate-200 border-2 border-white rounded-full shadow-sm" />
                             <div className="absolute right-0 top-1/2 translate-x-1/2 w-3 h-3 bg-indigo-500 border-2 border-white rounded-full shadow-sm" />
 
-                            <div className="flex items-center justify-between pointer-events-none">
-                                <span className="font-bold text-slate-800 truncate text-sm" title={node.data.title}>{node.data.title}</span>
-                                <div className={`w-2 h-2 rounded-full ${draggingNodeId === node.id ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`} />
+                            <div className="flex items-center justify-between gap-2">
+                                <input
+                                    type="checkbox"
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    checked={selectedIds.includes(node.data.id)}
+                                    onChange={() => onToggleSelect(node.data.id)}
+                                    className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
+                                />
+                                <span className="font-bold text-slate-800 truncate text-sm pointer-events-none select-none flex-1" title={node.data.title}>{node.data.title}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.stopPropagation(); onDelete(node.data.id); }}
+                                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                        title={`Delete ${node.data.title}`}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <div className={`w-2 h-2 rounded-full ${draggingNodeId === node.id ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`} />
+                                </div>
                             </div>
                             <div className="text-[10px] text-slate-500 pointer-events-none flex justify-between">
                                 <span>{node.data.parentId ? 'Subcategory' : 'Root Category'}</span>
@@ -324,6 +344,7 @@ export const CategoriesWorkflow: React.FC<WorkflowProps> = ({ categories, onAddS
                             </div>
 
                             <button
+                                onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => { e.stopPropagation(); onAddSub(node.data.id); }}
                                 className="mt-2 w-full py-1.5 text-[10px] font-bold text-center border border-dashed border-slate-200 rounded hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors opacity-0 group-hover:opacity-100"
                             >

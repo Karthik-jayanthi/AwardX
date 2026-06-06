@@ -27,9 +27,11 @@ interface CategoryItemProps {
    level: number;
    onAddSub: (id: string) => void;
    onDelete: (id: string) => void;
+   selectedIds: string[];
+   onToggleSelect: (id: string) => void;
 }
 
-const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, level, onAddSub, onDelete }) => {
+const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, level, onAddSub, onDelete, selectedIds, onToggleSelect }) => {
    const [isExpanded, setIsExpanded] = useState(true);
    const children = allCategories.filter(c => c.parentId === category.id);
    const hasChildren = children.length > 0;
@@ -54,10 +56,17 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, le
                   </div>
                )}
 
+               <input
+                  type="checkbox"
+                  checked={selectedIds.includes(category.id)}
+                  onChange={() => onToggleSelect(category.id)}
+                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
+               />
+
                <span className="text-sm font-medium text-slate-700 group-hover:text-indigo-900 transition-colors">{category.title}</span>
             </div>
 
-            <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                <span className="text-xs text-slate-500 flex items-center gap-1">
                   <FileText className="w-3 h-3" /> {category.entriesCount}
                </span>
@@ -98,6 +107,8 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, le
                         level={level + 1}
                         onAddSub={onAddSub}
                         onDelete={onDelete}
+                        selectedIds={selectedIds}
+                        onToggleSelect={onToggleSelect}
                      />
                   ))}
                </motion.div>
@@ -112,15 +123,23 @@ interface CategoryCardProps {
    allCategories: Category[];
    onAddSub: (id: string) => void;
    onDelete: (id: string) => void;
+   selectedIds: string[];
+   onToggleSelect: (id: string) => void;
 }
 
-const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, onAddSub, onDelete }) => {
+const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, onAddSub, onDelete, selectedIds, onToggleSelect }) => {
    const children = allCategories.filter(c => c.parentId === category.id);
 
    return (
       <div className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm hover:shadow-md transition-all">
          <div className="p-4 flex items-center justify-between border-b border-slate-50 bg-slate-50/50">
             <div className="flex items-center gap-3">
+               <input
+                  type="checkbox"
+                  checked={selectedIds.includes(category.id)}
+                  onChange={() => onToggleSelect(category.id)}
+                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
+               />
                <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
                   <Folder className="w-5 h-5" />
                </div>
@@ -131,11 +150,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
             </div>
             <div className="flex items-center gap-2">
                <button
-                  onClick={() => {
-                     if (window.confirm(`Are you sure you want to delete "${category.title}"? This will also delete all its subcategories.`)) {
-                        onDelete(category.id);
-                     }
-                  }}
+                  onClick={() => onDelete(category.id)}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   title="Delete Category"
                >
@@ -158,6 +173,8 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
                         level={0}
                         onAddSub={onAddSub}
                         onDelete={onDelete}
+                        selectedIds={selectedIds}
+                        onToggleSelect={onToggleSelect}
                      />
                   ))}
                </div>
@@ -185,8 +202,10 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
 }) => {
    const { confirm, ConfirmDialogNode } = useConfirm();
    const [categories, setCategories] = useState<Category[]>([]);
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [newCategory, setNewCategory] = useState({ title: '', parentId: '' });
+   const [isCreating, setIsCreating] = useState(false);
    const [internalViewMode, setInternalViewMode] = useState<AwardsViewMode>('workflow');
    const viewMode = viewModeProp ?? internalViewMode;
    const setViewMode = onViewModeChange ?? setInternalViewMode;
@@ -211,11 +230,26 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
       e.preventDefault();
       if (!activeEvent || !newCategory.title.trim()) return;
 
+      const titleTrimmed = newCategory.title.trim();
+      const parentIdNormalized = newCategory.parentId || null;
+
+      // Duplicate validation on the frontend
+      const isDuplicate = categories.some(
+         c =>
+            c.parentId === parentIdNormalized &&
+            c.title.trim().toLowerCase() === titleTrimmed.toLowerCase()
+      );
+      if (isDuplicate) {
+         toast.error('A category with this name already exists at this level.');
+         return;
+      }
+
+      setIsCreating(true);
       try {
          await db.addCategory({
-            title: newCategory.title.trim(),
+            title: titleTrimmed,
             programId: activeEvent.id,
-            parentId: newCategory.parentId || null,
+            parentId: parentIdNormalized,
          });
          await loadCategories();
          setIsModalOpen(false);
@@ -224,6 +258,8 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
       } catch (error) {
          const message = error instanceof Error ? error.message : 'Failed to create category';
          toast.error(message);
+      } finally {
+         setIsCreating(false);
       }
    };
 
@@ -246,6 +282,46 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
          toast.success('Category deleted');
       } catch (error) {
          const message = error instanceof Error ? error.message : 'Failed to delete category';
+         toast.error(message);
+      }
+   };
+
+   const handleToggleSelect = (categoryId: string) => {
+      setSelectedIds(prev =>
+         prev.includes(categoryId)
+            ? prev.filter(id => id !== categoryId)
+            : [...prev, categoryId]
+      );
+   };
+
+   const allSelected = categories.length > 0 && selectedIds.length === categories.length;
+   const handleToggleSelectAll = () => {
+      if (allSelected) {
+         setSelectedIds([]);
+      } else {
+         setSelectedIds(categories.map(c => c.id));
+      }
+   };
+
+   const handleDeleteSelected = async () => {
+      const ok = await confirm({
+         title: `Delete ${selectedIds.length} selected categor${selectedIds.length === 1 ? 'y' : 'ies'}?`,
+         description: 'This will also delete all their subcategories. This cannot be undone.',
+         confirmLabel: 'Delete selected',
+      });
+      if (!ok || !activeEvent) return;
+
+      try {
+         if (selectedIds.length === categories.length) {
+            await db.deleteAllCategories(activeEvent.id);
+         } else {
+            await Promise.all(selectedIds.map(id => db.deleteCategory(id, activeEvent.id)));
+         }
+         await loadCategories();
+         setSelectedIds([]);
+         toast.success('Selected categories deleted');
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Failed to delete categories';
          toast.error(message);
       }
    };
@@ -292,6 +368,26 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                   </button>
                </div>
 
+               {categories.length > 0 && (
+                  <Button
+                     variant="outline"
+                     className="flex items-center gap-2 text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition-colors"
+                     onClick={handleToggleSelectAll}
+                  >
+                     {allSelected ? 'Deselect All' : 'Select All'}
+                  </Button>
+               )}
+
+               {selectedIds.length > 0 && (
+                  <Button
+                     variant="outline"
+                     className="flex items-center gap-2 text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300"
+                     onClick={handleDeleteSelected}
+                  >
+                     <Trash2 className="w-4 h-4" /> Delete Selected ({selectedIds.length})
+                  </Button>
+               )}
+
                <Button className="flex items-center gap-2" onClick={() => openModal('')}>
                   <Plus className="w-4 h-4" /> Add Root Category
                </Button>
@@ -335,6 +431,8 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                               allCategories={categories}
                               onAddSub={openModal}
                               onDelete={handleDelete}
+                              selectedIds={selectedIds}
+                              onToggleSelect={handleToggleSelect}
                            />
                         ))}
 
@@ -353,13 +451,13 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
 
                {viewMode === 'workflow' && (
                   <div className="flex-1 min-h-0 h-full w-full overflow-hidden overscroll-none">
-                     <CategoriesWorkflow categories={categories} onAddSub={openModal} programId={activeEvent?.id} />
+                     <CategoriesWorkflow categories={categories} onAddSub={openModal} onDelete={handleDelete} selectedIds={selectedIds} onToggleSelect={handleToggleSelect} programId={activeEvent?.id} />
                   </div>
                )}
 
                {viewMode === 'tiles' && (
                   <div className="flex-1 min-h-0 overflow-y-auto p-4 lg:p-6">
-                     <CategoriesTiles categories={categories} onAddSub={openModal} />
+                     <CategoriesTiles categories={categories} onAddSub={openModal} onDelete={handleDelete} selectedIds={selectedIds} onToggleSelect={handleToggleSelect} />
                   </div>
                )}
             </motion.div>
@@ -402,8 +500,10 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                </div>
 
                <div className="flex justify-end gap-3 pt-2">
-                  <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                  <Button type="submit">Create Category</Button>
+                  <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isCreating}>Cancel</Button>
+                  <Button type="submit" disabled={isCreating}>
+                     {isCreating ? 'Creating...' : 'Create Category'}
+                  </Button>
                </div>
             </form>
          </Modal>

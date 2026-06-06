@@ -1,26 +1,38 @@
 import React from 'react';
 import { Category } from '../../services/models';
 import { getChildCategories, getRootCategories } from '../../lib/categoryHierarchy';
-import { Folder, Plus, FileText } from 'lucide-react';
+import { Folder, Plus, FileText, Trash2 } from 'lucide-react';
 
 interface TileProps {
     categories: Category[];
     onAddSub: (parentId: string) => void;
+    onDelete: (id: string) => void;
+    selectedIds: string[];
+    onToggleSelect: (id: string) => void;
 }
 
 interface ChildRowProps {
     category: Category;
     categories: Category[];
     onAddSub: (parentId: string) => void;
+    onDelete: (id: string) => void;
+    selectedIds: string[];
+    onToggleSelect: (id: string) => void;
     depth?: number;
 }
 
-const ChildRow: React.FC<ChildRowProps> = ({ category, categories, onAddSub, depth = 0 }) => {
+const ChildRow: React.FC<ChildRowProps> = ({ category, categories, onAddSub, onDelete, selectedIds, onToggleSelect, depth = 0 }) => {
     const children = getChildCategories(categories, category.id);
 
     return (
         <div className={depth > 0 ? 'ml-3 border-l-2 border-slate-100 pl-2' : undefined}>
             <div className="flex items-center gap-2 rounded-lg border border-slate-100 bg-white px-2.5 py-2 hover:border-indigo-200 transition-colors">
+                <input
+                    type="checkbox"
+                    checked={selectedIds.includes(category.id)}
+                    onChange={() => onToggleSelect(category.id)}
+                    className="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
+                />
                 <Folder className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700" title={category.title}>
                     {category.title}
@@ -39,6 +51,14 @@ const ChildRow: React.FC<ChildRowProps> = ({ category, categories, onAddSub, dep
                 >
                     + Sub
                 </button>
+                <button
+                    type="button"
+                    onClick={() => onDelete(category.id)}
+                    className="shrink-0 p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    title={`Delete ${category.title}`}
+                >
+                    <Trash2 className="w-3.5 h-3.5" />
+                </button>
             </div>
 
             {children.length > 0 && (
@@ -49,6 +69,9 @@ const ChildRow: React.FC<ChildRowProps> = ({ category, categories, onAddSub, dep
                             category={child}
                             categories={categories}
                             onAddSub={onAddSub}
+                            onDelete={onDelete}
+                            selectedIds={selectedIds}
+                            onToggleSelect={onToggleSelect}
                             depth={depth + 1}
                         />
                     ))}
@@ -62,14 +85,23 @@ interface RootCategoryTileProps {
     category: Category;
     categories: Category[];
     onAddSub: (parentId: string) => void;
+    onDelete: (id: string) => void;
+    selectedIds: string[];
+    onToggleSelect: (id: string) => void;
 }
 
-const RootCategoryTile: React.FC<RootCategoryTileProps> = ({ category, categories, onAddSub }) => {
+const RootCategoryTile: React.FC<RootCategoryTileProps> = ({ category, categories, onAddSub, onDelete, selectedIds, onToggleSelect }) => {
     const children = getChildCategories(categories, category.id);
 
     return (
         <article className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <header className="flex items-start gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+                <input
+                    type="checkbox"
+                    checked={selectedIds.includes(category.id)}
+                    onChange={() => onToggleSelect(category.id)}
+                    className="self-center w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer shrink-0"
+                />
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
                     <Folder className="h-5 w-5" />
                 </div>
@@ -81,6 +113,14 @@ const RootCategoryTile: React.FC<RootCategoryTileProps> = ({ category, categorie
                         {children.length} subcategor{children.length === 1 ? 'y' : 'ies'}
                     </p>
                 </div>
+                <button
+                    type="button"
+                    onClick={() => onDelete(category.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shrink-0"
+                    title={`Delete ${category.title}`}
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
             </header>
 
             <div className="flex-1 p-3">
@@ -92,6 +132,9 @@ const RootCategoryTile: React.FC<RootCategoryTileProps> = ({ category, categorie
                                 category={child}
                                 categories={categories}
                                 onAddSub={onAddSub}
+                                onDelete={onDelete}
+                                selectedIds={selectedIds}
+                                onToggleSelect={onToggleSelect}
                             />
                         ))}
                     </div>
@@ -116,7 +159,7 @@ const RootCategoryTile: React.FC<RootCategoryTileProps> = ({ category, categorie
     );
 };
 
-export const CategoriesTiles: React.FC<TileProps> = ({ categories, onAddSub }) => {
+export const CategoriesTiles: React.FC<TileProps> = ({ categories, onAddSub, onDelete, selectedIds, onToggleSelect }) => {
     const roots = getRootCategories(categories);
 
     return (
@@ -127,6 +170,9 @@ export const CategoriesTiles: React.FC<TileProps> = ({ categories, onAddSub }) =
                     category={root}
                     categories={categories}
                     onAddSub={onAddSub}
+                    onDelete={onDelete}
+                    selectedIds={selectedIds}
+                    onToggleSelect={onToggleSelect}
                 />
             ))}
 

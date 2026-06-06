@@ -1,5 +1,6 @@
 
 import React, { useDeferredValue, useState, useEffect, useMemo, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   LayoutDashboard, FileText, Gavel,
   BarChart3, Users, Settings, LogOut, Bell, Search,
@@ -231,6 +232,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Category State
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [parentForModal, setParentForModal] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState('');
 
@@ -720,18 +722,38 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeEvent || !newCategoryName) return;
+    if (!activeEvent || !newCategoryName.trim() || isCreatingCategory) return;
 
+    const trimmedName = newCategoryName.trim();
+    const parentId = parentForModal || null;
+
+    // Frontend duplicate check (case-insensitive) under the same level
+    const isDuplicate = categories.some(
+      (c) => c.title.toLowerCase().trim() === trimmedName.toLowerCase() &&
+             (c.parentId || null) === parentId
+    );
+
+    if (isDuplicate) {
+      toast.error('A category with this name already exists at this level.');
+      return;
+    }
+
+    setIsCreatingCategory(true);
     try {
       await databaseService.addCategory({
-        title: newCategoryName,
+        title: trimmedName,
         programId: activeEvent.id,
-        parentId: parentForModal,
+        parentId: parentId,
       });
       setNewCategoryName('');
       setIsCategoryModalOpen(false);
+      toast.success('Category created');
     } catch (error) {
       console.error('Failed to create category:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create category';
+      toast.error(message);
+    } finally {
+      setIsCreatingCategory(false);
     }
   };
 
@@ -1115,7 +1137,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
       {/* MAIN CONTENT AREA */}
       <div
-        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out min-h-screen relative lg:pl-20 lg:pr-0`}
+        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out h-screen max-h-screen overflow-hidden relative lg:pl-20 lg:pr-0`}
       >
         {/* Top Header Mobile/Desktop Mix */}
         {!hideHeader && (
@@ -1419,7 +1441,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="ghost" onClick={() => setIsCategoryModalOpen(false)}>Cancel</Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit" disabled={isCreatingCategory}>
+              {isCreatingCategory ? 'Creating...' : 'Create'}
+            </Button>
           </div>
         </form>
       </Modal>

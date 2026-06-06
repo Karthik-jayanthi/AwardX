@@ -1195,6 +1195,26 @@ class DatabaseService {
     });
   }
 
+  async deleteAllCategories(programId: string): Promise<void> {
+    await fetchBackendJson<{ ok: boolean }>(
+      `/api/programs/${encodeURIComponent(programId)}/categories`,
+      {
+        method: 'DELETE',
+        requireAuth: true,
+        errorPrefix: 'Categories API',
+      },
+    );
+
+    await this.safeAuditLog({
+      action: 'Deleted all categories',
+      actionType: 'delete',
+      resourceType: 'category',
+      resourceId: programId,
+      details: `All categories deleted for program ${programId}`,
+      metadata: { programId },
+    });
+  }
+
   async addCategory(category: Omit<Category, 'id' | 'entriesCount'>): Promise<Category> {
     const response = await fetchBackendJson<{ data: any }>(
       `/api/programs/${encodeURIComponent(category.programId)}/categories`,

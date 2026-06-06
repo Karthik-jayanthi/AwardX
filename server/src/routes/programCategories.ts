@@ -66,6 +66,28 @@ router.post('/:programId/categories', requireAuth, async (req: AuthenticatedRequ
     }
 
     const supabase = getSupabaseAdmin();
+
+    // Check for duplicate category name at the same level under the same program
+    let dupQuery = supabase
+      .from('categories')
+      .select('id')
+      .eq('program_id', programId)
+      .ilike('title', title);
+
+    if (parentId) {
+      dupQuery = dupQuery.eq('parent_id', parentId);
+    } else {
+      dupQuery = dupQuery.is('parent_id', null);
+    }
+
+    const { data: duplicate, error: duplicateError } = await dupQuery.maybeSingle();
+    if (duplicateError) {
+      console.error('Error checking duplicate category name:', duplicateError);
+    }
+    if (duplicate) {
+      return res.status(409).json({ error: 'A category with this name already exists at this level' });
+    }
+
     const { data, error } = await supabase
       .from('categories')
       .insert({
@@ -81,6 +103,34 @@ router.post('/:programId/categories', requireAuth, async (req: AuthenticatedRequ
     }
 
     return res.status(201).json({ data: mapCategory(data as Record<string, unknown>) });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.delete('/:programId/categories', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { programId } = req.params;
+  if (!programId) {
+    return res.status(400).json({ error: 'programId is required' });
+  }
+
+  try {
+    const access = await ensureCanManageProgram(req.userId || '', programId);
+    if (!access.ok) {
+      return res.status(access.status).json({ error: access.error });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('program_id', programId);
+
+    if (error) {
+      return res.status(500).json({ error: error.message || 'Failed to delete all categories' });
+    }
+
+    return res.json({ ok: true });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
