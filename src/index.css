@@ -147,25 +147,54 @@ body {
   overflow-x: hidden;
 }
 
-@keyframes button-tap-bounce {
-  0% {
-    transform: scale(1);
-  }
-  45% {
-    transform: scale(0.94);
-  }
-  100% {
-    transform: scale(1);
-  }
+/*
+ * Global tactile feedback for buttons.
+ *
+ * The press uses an immediate transform on :active so the button stays
+ * depressed for as long as the user is holding it, then springs back via
+ * the longer release transition when :active ends. The result feels
+ * physical without any per-component wiring.
+ *
+ * Components can opt out by adding `data-no-press` to the element.
+ */
+button:not(:disabled):not([data-no-press]),
+[role="button"]:not([aria-disabled="true"]):not([data-no-press]),
+a[data-press="true"] {
+  cursor: pointer;
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    color 180ms ease-out,
+    box-shadow 180ms ease-out,
+    opacity 180ms ease-out;
+  transform: translateZ(0) scale(1);
+  will-change: transform;
 }
 
-button:not(:disabled):active {
-  animation: button-tap-bounce 180ms cubic-bezier(0.22, 0.61, 0.36, 1);
+button:disabled,
+button[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+button:not(:disabled):not([data-no-press]):active,
+[role="button"]:not([aria-disabled="true"]):not([data-no-press]):active,
+a[data-press="true"]:active {
+  transform: translateZ(0) scale(0.96);
+  transition:
+    transform 80ms ease-out,
+    background-color 120ms ease-out,
+    box-shadow 120ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button:not(:disabled):active {
-    animation: none;
+  button,
+  [role="button"],
+  a[data-press="true"] {
+    transition: background-color 120ms ease-out, color 120ms ease-out,
+      border-color 120ms ease-out, opacity 120ms ease-out !important;
+    transform: none !important;
   }
 }
 

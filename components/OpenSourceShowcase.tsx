@@ -2,44 +2,45 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, useInView } from 'framer-motion';
 import {
   Github,
-  Star,
-  GitFork,
-  GitPullRequest,
-  Users,
-  Server,
-  ShieldCheck,
-  Code2,
-  Database,
   Layers,
+  Database,
+  Server,
+  Workflow,
+  ShieldCheck,
+  Cog,
 } from 'lucide-react';
 
+// Numbers grounded in the actual repo at the time of writing:
+//   supabase/migrations/   → 30 SQL migrations
+//   server/src/routes/     → 19 Express routers
+//   components/dashboard/  → 39 top-level dashboard views
 const stats = [
-  { icon: Star, label: 'GitHub Stars', value: 12432, suffix: '', color: 'from-amber-400 to-orange-500' },
-  { icon: GitFork, label: 'Forks', value: 1840, suffix: '', color: 'from-purple-400 to-fuchsia-500' },
-  { icon: GitPullRequest, label: 'Pull Requests Merged', value: 2104, suffix: '', color: 'from-emerald-400 to-teal-500' },
-  { icon: Users, label: 'Contributors', value: 340, suffix: '+', color: 'from-indigo-400 to-blue-500' },
+  { icon: Database, label: 'SQL migrations', value: 30, suffix: '', color: 'from-emerald-400 to-teal-500' },
+  { icon: Server, label: 'API routers', value: 19, suffix: '', color: 'from-cyan-400 to-blue-500' },
+  { icon: Layers, label: 'Dashboard views', value: 39, suffix: '', color: 'from-indigo-400 to-purple-500' },
+  { icon: Workflow, label: 'Round types supported', value: 5, suffix: '', color: 'from-amber-400 to-orange-500' },
 ];
 
 const pillars = [
   {
     icon: Server,
-    title: 'Self-host anywhere',
-    description: 'Deploy on Vercel, Railway, Fly.io, or your own bare-metal cluster. One Docker image, zero lock-in.',
+    title: 'Self-host on Node + Supabase',
+    description: 'Vite-built frontend, Express API in /server, serverless handlers in /api, Supabase Postgres. Host the frontend anywhere static, the API anywhere Node 20+ runs.',
   },
   {
     icon: ShieldCheck,
-    title: 'Own your data',
-    description: 'Your database, your storage buckets, your encryption keys. No telemetry phoning home.',
+    title: 'Authorization in two places',
+    description: 'Postgres RLS gates direct reads from the browser; the Express middleware re-checks every privileged mutation. The service-role key never reaches the client.',
   },
   {
-    icon: Code2,
-    title: 'Hackable core',
-    description: 'TypeScript end-to-end. Plugin API for custom judging logic, scoring rules, and notifications.',
+    icon: Workflow,
+    title: 'Graph-based judging',
+    description: 'Rounds connect via edges with conditions (always, if shortlisted, score threshold, manual). The linear and graph editors render the same workflow.',
   },
   {
-    icon: Database,
-    title: 'Open data model',
-    description: 'Postgres schema is documented and migrations are versioned. Run BI tools directly against it.',
+    icon: Cog,
+    title: 'Plain SQL migrations',
+    description: 'No ORM. Migrations live in supabase/migrations/ and are applied with the Supabase CLI. Types regenerate from the live schema.',
   },
 ];
 
@@ -88,10 +89,10 @@ const StatCard: React.FC<{ stat: typeof stats[number]; inView: boolean; delay: n
 
 const StackPanel: React.FC = () => {
   const layers = [
-    { name: 'apps/web', desc: 'React + Vite + Tailwind dashboard', tone: 'from-indigo-500/30 to-purple-500/30' },
-    { name: 'apps/api', desc: 'Fastify · Zod · tRPC', tone: 'from-cyan-500/30 to-blue-500/30' },
-    { name: 'packages/db', desc: 'Drizzle ORM · Postgres', tone: 'from-emerald-500/30 to-teal-500/30' },
-    { name: 'packages/plugins', desc: 'Typed lifecycle hooks', tone: 'from-rose-500/30 to-pink-500/30' },
+    { name: 'components/ + src/', desc: 'React 19 · Vite 6 · Tailwind v4 · Framer Motion', tone: 'from-indigo-500/30 to-purple-500/30' },
+    { name: 'server/', desc: 'Node + Express 4 · tsx in dev', tone: 'from-cyan-500/30 to-blue-500/30' },
+    { name: 'api/', desc: 'Serverless route handlers (Vercel)', tone: 'from-rose-500/30 to-pink-500/30' },
+    { name: 'supabase/migrations/', desc: 'Plain SQL · Postgres + RLS', tone: 'from-emerald-500/30 to-teal-500/30' },
   ];
   return (
     <div className="relative">
@@ -106,7 +107,7 @@ const StackPanel: React.FC = () => {
             <span className="text-xs font-bold text-white/70 tracking-widest uppercase">Architecture</span>
           </div>
           <span className="text-[10px] font-mono text-emerald-300 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> v2.x
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> live
           </span>
         </div>
 
@@ -133,24 +134,13 @@ const StackPanel: React.FC = () => {
         </div>
 
         <div className="px-6 py-3 border-t border-white/10 flex items-center justify-between text-[11px]">
-          <span className="text-white/40">Monorepo · pnpm workspaces</span>
-          <span className="text-emerald-300 font-mono">MIT</span>
+          <span className="text-white/40">npm · Vite · TypeScript</span>
+          <span className="text-emerald-300 font-mono">GitHub</span>
         </div>
       </div>
     </div>
   );
 };
-
-const contributors = [
-  { initials: 'SJ', color: 'from-pink-500 to-rose-500' },
-  { initials: 'DC', color: 'from-blue-500 to-cyan-500' },
-  { initials: 'ER', color: 'from-purple-500 to-indigo-500' },
-  { initials: 'MK', color: 'from-emerald-500 to-teal-500' },
-  { initials: 'AT', color: 'from-orange-500 to-amber-500' },
-  { initials: 'LB', color: 'from-fuchsia-500 to-pink-500' },
-  { initials: 'JN', color: 'from-sky-500 to-blue-500' },
-  { initials: 'RH', color: 'from-violet-500 to-purple-500' },
-];
 
 export const OpenSourceShowcase: React.FC = () => {
   const ref = useRef<HTMLDivElement>(null);
@@ -187,8 +177,8 @@ export const OpenSourceShowcase: React.FC = () => {
             transition={{ delay: 0.1 }}
             className="text-lg text-slate-400 leading-relaxed"
           >
-            AwardX is MIT-licensed and developed in public. No "contact sales" walls,
-            no usage caps, no surprise migrations. Clone it tonight, ship a program tomorrow.
+            AwardX is developed in public on GitHub. Every API route, every SQL migration,
+            every dashboard view sits in the same repo &mdash; auditable, forkable, and yours to run.
           </motion.p>
         </div>
 
@@ -227,7 +217,7 @@ export const OpenSourceShowcase: React.FC = () => {
           </div>
         </div>
 
-        {/* Contributors strip */}
+        {/* Repo strip */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -236,31 +226,25 @@ export const OpenSourceShowcase: React.FC = () => {
         >
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
-              <h3 className="text-2xl font-bold text-white mb-2 font-display">Powered by a global community</h3>
-              <p className="text-slate-400 text-sm">340+ contributors across 47 countries. Your name could be next.</p>
+              <h3 className="text-2xl font-bold text-white mb-2 font-display">Cognivo25/AwardX</h3>
+              <p className="text-slate-400 text-sm">Open issues, file a pull request, or read the migration history straight on GitHub.</p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex -space-x-3">
-                {contributors.map((c, i) => (
-                  <div
-                    key={i}
-                    className={`w-11 h-11 rounded-full border-2 border-slate-950 bg-gradient-to-br ${c.color} flex items-center justify-center text-white text-xs font-bold shadow-lg hover:scale-110 hover:z-10 transition-transform cursor-pointer`}
-                    style={{ zIndex: contributors.length - i }}
-                  >
-                    {c.initials}
-                  </div>
-                ))}
-                <div className="w-11 h-11 rounded-full border-2 border-slate-950 bg-white/10 flex items-center justify-center text-white text-xs font-bold backdrop-blur-sm">
-                  +332
-                </div>
-              </div>
+            <div className="flex items-center gap-3 flex-wrap">
               <a
-                href="https://github.com/awardx/awardx"
+                href="https://github.com/Cognivo25/AwardX"
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white text-slate-900 text-sm font-bold hover:bg-slate-100 transition-colors shadow-lg"
               >
-                <Github className="w-4 h-4" /> Contribute
+                <Github className="w-4 h-4" /> View repo
+              </a>
+              <a
+                href="https://github.com/Cognivo25/AwardX/issues"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/10 text-white text-sm font-bold hover:bg-white/15 transition-colors border border-white/15"
+              >
+                File an issue
               </a>
             </div>
           </div>

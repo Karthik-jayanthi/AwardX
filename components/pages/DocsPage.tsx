@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import MiniSearch from 'minisearch';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
   Book,
@@ -9,20 +10,23 @@ import {
   Layers,
   Zap,
   Code2,
-  Cloud,
   GitBranch,
-  Plug,
   Users,
   Mail,
-  Webhook,
   FileJson,
   ChevronRight,
-  Command,
-  X,
-  ExternalLink,
   Hash,
-  Github,
   BookOpen,
+  Workflow,
+  Vote,
+  ClipboardList,
+  CreditCard,
+  Trophy,
+  LifeBuoy,
+  Sparkles,
+  ArrowUp,
+  ArrowDown,
+  CornerDownLeft,
 } from 'lucide-react';
 
 // ----- Docs content model -----
@@ -46,37 +50,32 @@ type DocSection = {
 const sections: DocSection[] = [
   {
     id: 'introduction',
-    title: 'Introduction to AwardX',
+    title: 'What is AwardX',
     category: 'Getting Started',
     icon: Book,
-    description: 'What AwardX is, who it is for, and how the platform is structured.',
+    description: 'A workspace for running awards programs end-to-end — entry, judging, voting, and announcement.',
     blocks: [
       {
         kind: 'p',
-        text: 'AwardX is an open-source operating system for running awards, competitions, hackathons, and recognition programs. It is MIT licensed and shipped as a self-hostable monorepo built on React, TypeScript, Node.js, and PostgreSQL.',
+        text: 'AwardX is a multi-tenant awards management system. You create an organization, spin up one or more programs inside it, configure how submissions are collected and judged, then run the program from intake to winner announcement in the same dashboard.',
       },
       {
         kind: 'p',
-        text: 'The platform covers the full lifecycle of a program — entry collection, multi-round judging with weighted criteria, payments, public voting, and winner announcement — without locking your data into a vendor.',
+        text: 'The platform is organised around five top-level resources: organizations, programs, categories, submissions, and rounds. Everything else — judges, forms, scores, payments, public voting — hangs off those.',
       },
       {
-        kind: 'h3', text: 'Who it is for',
-      },
+        kind: 'h3', text: 'What it covers' },
       {
         kind: 'list',
         items: [
-          'Industry associations running annual awards',
-          'Universities running creative or research competitions',
-          'Tech communities organising hackathons and demo days',
-          'Media companies hosting film, music, and design festivals',
-          'Internal HR teams running employee recognition cycles',
+          'Public landing pages and submission forms per program',
+          'A drag-and-drop form builder with multi-step sections',
+          'Multi-round judging with configurable evaluation logic',
+          'Public voting rounds with leaderboards',
+          'Paid entries via Stripe, Razorpay, or PayPal',
+          'Mass email to judges, applicants, and team members',
+          'Audit logs and granular role-based permissions',
         ],
-      },
-      {
-        kind: 'callout',
-        tone: 'info',
-        title: 'Three deployment modes',
-        text: 'Self-host the open source build, run AwardX Cloud (managed), or fork the repo and ship a white-labelled distribution under your own brand. The same codebase powers all three.',
       },
     ],
   },
@@ -85,94 +84,152 @@ const sections: DocSection[] = [
     title: 'Architecture overview',
     category: 'Getting Started',
     icon: Layers,
-    description: 'How the web app, API server, queue workers, and database fit together.',
+    description: 'How the frontend, API server, scheduler, and Supabase backend fit together.',
     blocks: [
-      { kind: 'p', text: 'AwardX is a TypeScript monorepo. The marketing site and dashboard share a Vite + React frontend, the API runs on Fastify, background work runs on BullMQ, and data lives in Postgres with file storage abstracted behind an S3-compatible interface.' },
-      { kind: 'h3', text: 'Top-level packages' },
+      { kind: 'p', text: 'AwardX is a single TypeScript repository. The browser app, the Node API, and the serverless route handlers all live alongside each other, and Supabase provides Postgres, auth, storage, and realtime.' },
+      { kind: 'h3', text: 'Top-level layout' },
       {
         kind: 'table',
-        headers: ['Package', 'Role', 'Stack'],
+        headers: ['Folder', 'Role', 'Stack'],
         rows: [
-          ['apps/web', 'Marketing site + admin dashboard', 'Vite, React 18, Tailwind, Framer Motion'],
-          ['apps/api', 'REST + tRPC endpoints', 'Node 20, Fastify, Zod'],
-          ['apps/worker', 'Async jobs (email, exports, scoring)', 'BullMQ on Redis'],
-          ['packages/db', 'Schema, migrations, query helpers', 'Drizzle ORM, Postgres'],
-          ['packages/plugins', 'Plugin SDK and core plugins', 'TypeScript, Zod'],
-          ['packages/ui', 'Shared component library', 'React, Radix, Tailwind'],
+          ['/ (root) + components/ + src/', 'Dashboard SPA and marketing pages', 'Vite 6, React 19, Tailwind v4, Framer Motion, React Router 6'],
+          ['server/', 'Long-running API server', 'Node + Express 4, tsx in dev'],
+          ['api/', 'Serverless route handlers (Vercel)', 'TypeScript Node functions'],
+          ['supabase/migrations/', 'Versioned SQL migrations', 'Plain PostgreSQL (RLS-aware)'],
+          ['services/', 'Frontend data layer', 'Supabase JS client, TanStack Query'],
+          ['types/ + lib/ + hooks/', 'Shared types and helpers', 'TypeScript'],
         ],
       },
       { kind: 'h3', text: 'Request lifecycle' },
       {
         kind: 'list',
         items: [
-          'Browser hits apps/web served by the React Router shell.',
-          'Authenticated calls route to apps/api via /api/* — JWT verified on every request.',
-          'Long-running work (PDF export, scoring rollup, email blast) is enqueued on Redis and picked up by apps/worker.',
-          'Files (logos, submission attachments) are streamed to your S3 bucket via signed URLs.',
+          'The browser loads the Vite-built React app and authenticates against Supabase Auth.',
+          'Reads usually hit Supabase directly through the JS client; Row Level Security in Postgres enforces who can see what.',
+          'Mutations that touch multiple tables, run authorization beyond RLS, or wrap business logic (advancement, voting, judge assignment) go through the Express server in /server.',
+          'A scheduler started at server boot (server/src/jobs/roundScheduler.ts) drives round-state transitions on a timer.',
+          'Outbound email goes through Resend via either an org-level or program-level connection.',
         ],
+      },
+    ],
+  },
+  {
+    id: 'getting-started',
+    title: 'Run AwardX locally',
+    category: 'Getting Started',
+    icon: Zap,
+    description: 'Clone, install, point at Supabase, and run the app + API together.',
+    blocks: [
+      { kind: 'p', text: 'You need Node 20+, npm, and a Supabase project (cloud or local). The frontend uses the Supabase anon key; the API server uses the service-role key.' },
+      {
+        kind: 'code',
+        lang: 'bash',
+        text: `# 1. Install dependencies
+npm install
+
+# 2. Set up env vars at the repo root
+cp env/.env.example .env  # then fill the values below
+
+# 3. Apply the migrations against your Supabase Postgres
+#    Run supabase/migrations/*.sql in order, or use the Supabase CLI:
+supabase db push
+
+# 4. Start the dev servers
+npm run dev          # Vite frontend (http://localhost:5173)
+npm --prefix server run dev  # Express API (http://localhost:5001)`,
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        title: 'Two servers, one app',
+        text: 'The Vite dev server serves the UI; the Express server in /server handles the writes that need elevated privileges. Both must be running for the dashboard to function.',
       },
     ],
   },
   {
     id: 'configuration',
-    title: 'Configuration & environment',
+    title: 'Environment variables',
     category: 'Setup',
     icon: Settings,
-    description: 'Every environment variable AwardX understands.',
+    description: 'The variables the frontend and API server read on boot.',
     blocks: [
-      { kind: 'p', text: 'AwardX is configured entirely through environment variables. The .env.example file in the repo is the canonical reference; below are the variables you almost always need to set in production.' },
+      { kind: 'p', text: 'Vite-exposed variables must be prefixed with VITE_. Anything else is read only by the Express server in /server. The API server reads .env first and then .env.local as an override, matching Vite\'s convention.' },
+      { kind: 'h3', text: 'Frontend (Vite)' },
       {
         kind: 'table',
         headers: ['Variable', 'Required', 'Purpose'],
         rows: [
-          ['DATABASE_URL', 'Yes', 'Postgres connection string (postgres://user:pass@host:5432/awardx)'],
-          ['REDIS_URL', 'Yes', 'Redis instance for queues, sessions, and rate limiting'],
-          ['JWT_SECRET', 'Yes', '32+ char secret for signing auth tokens'],
-          ['STORAGE_BUCKET', 'Yes', 'S3-compatible bucket name for uploads'],
-          ['STORAGE_ENDPOINT', 'Optional', 'Set to your MinIO/R2/Wasabi endpoint, blank for AWS S3'],
-          ['SMTP_URL', 'Recommended', 'Outbound email transport for invites and notifications'],
-          ['PUBLIC_APP_URL', 'Yes', 'Public origin used in invite links and OG metadata'],
+          ['VITE_SUPABASE_URL', 'Yes', 'Your Supabase project URL'],
+          ['VITE_SUPABASE_ANON_KEY', 'Yes', 'Public anon key for the browser client'],
+          ['VITE_API_BASE_URL', 'Optional', 'Base URL of the Express server (defaults to /api proxy in dev)'],
+          ['VITE_SENTRY_DSN', 'Optional', 'Frontend error reporting'],
+        ],
+      },
+      { kind: 'h3', text: 'API server (Node)' },
+      {
+        kind: 'table',
+        headers: ['Variable', 'Required', 'Purpose'],
+        rows: [
+          ['SUPABASE_URL', 'Yes', 'Same project URL'],
+          ['SUPABASE_SERVICE_ROLE_KEY', 'Yes', 'Service-role key used for privileged writes'],
+          ['REDIS_URL', 'Optional', 'Enables the Redis cache layer; falls back to in-memory when absent'],
+          ['RESEND_API_KEY', 'Recommended', 'Default Resend key for organization-level email'],
+          ['PORT', 'Optional', 'API port — defaults to 5001 to avoid macOS AirPlay on 5000'],
         ],
       },
       {
         kind: 'callout',
         tone: 'warn',
-        title: 'Never commit secrets',
-        text: 'AwardX ships with a pre-commit hook that scans for AWS keys, JWT secrets, and Stripe tokens. Audit before pushing if you suspect a leak.',
+        title: 'Service-role key is server-only',
+        text: 'Never expose SUPABASE_SERVICE_ROLE_KEY to the browser. It bypasses RLS. Only the Express server should hold it.',
       },
     ],
   },
   {
     id: 'database',
-    title: 'Database schema & migrations',
+    title: 'Database & migrations',
     category: 'Setup',
     icon: Database,
-    description: 'Drizzle, Postgres, and how to add a column.',
+    description: 'Plain SQL migrations against Supabase Postgres, with RLS as the primary authorization gate.',
     blocks: [
-      { kind: 'p', text: 'AwardX uses Drizzle ORM over Postgres 14+. All schema lives in packages/db/schema and migrations are generated, not hand-written.' },
-      { kind: 'h3', text: 'Adding a column' },
+      { kind: 'p', text: 'AwardX uses raw SQL migration files committed to supabase/migrations/. There is no ORM — the frontend uses the Supabase JS client and the API server uses @supabase/supabase-js with the service-role key.' },
+      { kind: 'h3', text: 'Migration workflow' },
       {
         kind: 'code',
         lang: 'bash',
-        text: `# 1. Edit packages/db/schema/programs.ts
-# 2. Generate a migration file
-pnpm db:generate
+        text: `# 1. Add a new file with a numeric prefix (existing range: 001 → 026)
+#    supabase/migrations/027_my_change.sql
+# 2. Write the change as plain SQL, including any new RLS policies
+# 3. Apply with the Supabase CLI
+supabase db push
 
-# 3. Review packages/db/migrations/NNNN_*.sql
-# 4. Apply
-pnpm db:migrate`,
+# Generated TS types live in services/database.types.ts.
+# Regenerate after schema changes:
+npx supabase gen types typescript --project-id YOUR_PROJECT_ID \\
+  > services/database.types.ts`,
       },
       { kind: 'h3', text: 'Core tables' },
       {
         kind: 'list',
         items: [
-          'organizations — top-level tenant',
-          'programs — an awards program belonging to an org',
-          'categories — sub-divisions within a program',
-          'submissions — entries from nominees',
-          'judges, rounds, scores — judging pipeline',
-          'contacts — unified people record (users, judges, nominees)',
+          'organizations — top-level tenant; users belong via org_members',
+          'programs — an awards program inside an organization',
+          'program_categories — categories and subcategories for entries',
+          'program_forms — form schemas; one is marked active per program',
+          'submissions — entries and their judging state',
+          'rounds + round_edges — the judging workflow graph',
+          'judges, judge_groups, judge_category_assignments — the panel',
+          'scores — per-judge, per-submission, per-criterion',
+          'program_payment_configs — Stripe/Razorpay/PayPal settings',
+          'invites + email_logs — outbound invite delivery',
+          'audit_logs — append-only record of sensitive actions',
         ],
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        title: 'RLS is enforced',
+        text: 'Most tables ship with RLS policies (see migration 001_rls_policies.sql plus targeted hardening migrations). The frontend can talk to Supabase directly because RLS will refuse rows the user is not entitled to.',
       },
     ],
   },
@@ -181,60 +238,49 @@ pnpm db:migrate`,
     title: 'Authentication & roles',
     category: 'Setup',
     icon: Shield,
-    description: 'JWT, OAuth providers, magic links, and role-based access.',
+    description: 'Supabase Auth for sign-in, custom role tables for what each user can do.',
     blocks: [
-      { kind: 'p', text: 'AwardX supports email + password, magic link, and OAuth (Google, GitHub, LinkedIn, Microsoft). Tokens are JWTs signed with JWT_SECRET; sessions are stored in Redis for instant revocation.' },
+      { kind: 'p', text: 'Sign-in is handled entirely by Supabase Auth. AwardX supports email + password and OAuth providers (Google, GitHub, LinkedIn). The session JWT travels with every Supabase request and is forwarded to the Express API as a bearer token.' },
       { kind: 'h3', text: 'Built-in roles' },
       {
         kind: 'table',
-        headers: ['Role', 'Scope', 'Can do'],
+        headers: ['Role', 'Scope', 'Typical permissions'],
         rows: [
-          ['Owner', 'Organization', 'Billing, delete org, manage all programs'],
+          ['Owner', 'Organization', 'Billing, delete org, full access to every program'],
           ['Admin', 'Organization', 'Create programs, invite team, view analytics'],
-          ['Program Manager', 'Program', 'Edit one program, manage judges, exports'],
-          ['Judge', 'Round', 'Score assigned submissions only'],
-          ['Nominee', 'Submission', 'Submit and edit their own entries'],
+          ['Program Manager', 'Single program', 'Manage one program — categories, forms, judges, exports'],
+          ['Judge', 'Round', 'Score the submissions assigned to them'],
+          ['Applicant', 'Submission', 'Submit and edit their own entries on the public side'],
         ],
       },
       {
         kind: 'callout',
         tone: 'info',
-        title: 'Custom roles',
-        text: 'Need a "Read-only Auditor" or "Sponsor"? Define custom roles in packages/auth/policies.ts — the policy file is plain TypeScript and hot-reloads in dev.',
+        title: 'Permission checks happen in two places',
+        text: 'The frontend gates UI with services/database.ts hasPermission(...) to hide things the current user cannot touch. The Express server re-checks every mutation in server/src/middleware (programAccess.ts, programManagement.ts) — never trust the client alone.',
       },
     ],
   },
   {
-    id: 'judging',
-    title: 'Judging workflows',
+    id: 'programs',
+    title: 'Organizations, programs & categories',
     category: 'Core Concepts',
-    icon: Zap,
-    description: 'Multi-round judging, weighted criteria, recusal, and scoring rollup.',
+    icon: Trophy,
+    description: 'The hierarchy every other concept hangs off.',
     blocks: [
-      { kind: 'p', text: 'A program can have any number of rounds. Each round has its own pool of submissions (filtered or carried forward from previous rounds), its own judge panel, and its own scoring rubric.' },
-      { kind: 'h3', text: 'Scoring methods' },
+      { kind: 'p', text: 'An organization is the billing and team boundary. A program is a single awards cycle — for example "2026 Design Awards" — belonging to one organization. Categories live inside a program and can be nested.' },
+      { kind: 'h3', text: 'Lifecycle of a program' },
       {
         kind: 'list',
         items: [
-          'Numeric rubric — judges score each criterion 1–10; weighted average is the final score.',
-          'Forced ranking — judges order all entries in their pool; Borda count produces the result.',
-          'Yes/No — pass-fail screening rounds for shortlisting.',
-          'Custom — plug in your own scoring function via the scoring API.',
+          'Create the program shell and set basic details (deadline, branding, visibility).',
+          'Build the entry form in the Form Builder; activate it for the program.',
+          'Add categories (and subcategories if needed).',
+          'Configure the schedule and rounds — what happens after entries close.',
+          'Invite judges and assign them to categories or specific submissions.',
+          'Open the program to receive submissions through the public landing page.',
+          'Advance shortlists between rounds; announce winners on the leaderboard.',
         ],
-      },
-      {
-        kind: 'code',
-        lang: 'typescript',
-        text: `import { defineScoringMethod } from '@awardx/plugins';
-
-export default defineScoringMethod({
-  id: 'geometric-mean',
-  label: 'Geometric Mean',
-  compute: (criteria) => {
-    const product = criteria.reduce((acc, c) => acc * c.score, 1);
-    return Math.pow(product, 1 / criteria.length);
-  },
-});`,
       },
     ],
   },
@@ -243,122 +289,143 @@ export default defineScoringMethod({
     title: 'Form builder & submissions',
     category: 'Core Concepts',
     icon: FileJson,
-    description: 'Build entry forms with conditional logic and file uploads.',
+    description: 'Build the entry form once; it renders identically on the admin preview and the public submission page.',
     blocks: [
-      { kind: 'p', text: 'The form builder produces a JSON Schema describing fields, validation, and conditional logic. The same schema renders both the admin preview and the public submission page.' },
+      { kind: 'p', text: 'The Form Builder produces a JSON schema describing fields, sections, and validation. A program can have multiple forms in draft, but only the one marked active is exposed to applicants.' },
       { kind: 'h3', text: 'Supported field types' },
       {
         kind: 'list',
         items: [
-          'Text, long text, number, date, dropdown, multi-select, country, URL',
-          'File upload (single + multi) with per-field size & MIME constraints',
-          'Image gallery with drag-to-reorder',
-          'Video URL with automatic thumbnail extraction',
-          'Repeating groups for team members or work samples',
-          'Signature pad for declarations',
+          'Text, long text, number, date, dropdown, multi-select, URL',
+          'File upload with per-field size and MIME constraints',
+          'Image attachments rendered as a gallery',
+          'Multi-step sections — split a long form across pages',
+          'Conditional logic — show or hide fields based on prior answers',
+          'Category selector — bound to the program’s categories list',
         ],
       },
       {
         kind: 'callout',
         tone: 'info',
-        title: 'Headless submissions',
-        text: 'Every form is also exposed as a REST endpoint at /api/forms/:id/submit. Embed AwardX entry forms inside your own website, mobile app, or chat bot.',
+        title: 'Public submission page',
+        text: 'Each program with an active form gets a public URL (see PublicProgramPage and FormSubmissionPage in components/pages). Applicants can submit signed-in or via a shareable link, depending on the program’s visibility settings.',
       },
     ],
   },
   {
-    id: 'plugins',
-    title: 'Plugin SDK',
-    category: 'Extending',
-    icon: Plug,
-    description: 'Hook into the lifecycle with TypeScript plugins.',
+    id: 'judging',
+    title: 'Judging & scoring',
+    category: 'Core Concepts',
+    icon: ClipboardList,
+    description: 'Judge groups, criteria, blind evaluation, and scoring rollup.',
     blocks: [
-      { kind: 'p', text: 'Plugins are the primary extension surface. Drop a file into packages/plugins/<your-plugin>/index.ts and AwardX will register it automatically on next boot.' },
-      {
-        kind: 'code',
-        lang: 'typescript',
-        text: `import { definePlugin } from '@awardx/plugins';
-
-export default definePlugin({
-  id: 'slack-winner-announcer',
-  on: {
-    'round.completed': async (ctx) => {
-      const winners = await ctx.db.scores.topN(ctx.round.id, 3);
-      await fetch(process.env.SLACK_WEBHOOK!, {
-        method: 'POST',
-        body: JSON.stringify({
-          text: \`Round \${ctx.round.name} winners: \${winners.map(w => w.name).join(', ')}\`,
-        }),
-      });
-    },
-  },
-});`,
-      },
-      { kind: 'h3', text: 'Lifecycle events' },
+      { kind: 'p', text: 'Judging is structured as rounds (see next section). Inside a round, each judge sees only the submissions they have been assigned, scores them against the configured criteria, and saves progress as they go.' },
+      { kind: 'h3', text: 'Concepts' },
       {
         kind: 'list',
         items: [
-          'submission.created · submission.updated · submission.deleted',
-          'round.started · round.completed',
-          'judge.assigned · score.submitted',
-          'payment.succeeded · payment.refunded',
-          'program.published · program.archived',
+          'Judge groups — collections of judges that can be assigned together.',
+          'Category assignment — judges can be restricted to specific categories.',
+          'Auto-assign — distribute submissions across the panel based on count and load.',
+          'Blind evaluation — hide applicant identity from the judge interface.',
+          'Per-criterion scores — judges score each criterion; weights produce the aggregate.',
+        ],
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        title: 'Where it lives in the code',
+        text: 'Judge UX is in components/dashboard/JudgingView.tsx, JudgeScoringModal.tsx, and the judgeGroups/ subfolder. The judge-facing portal is components/pages/JudgePortalPage.tsx.',
+      },
+    ],
+  },
+  {
+    id: 'schedule-rounds',
+    title: 'Schedule & rounds workflow',
+    category: 'Core Concepts',
+    icon: Workflow,
+    description: 'Compose evaluation as a graph of rounds with explicit start/end conditions.',
+    blocks: [
+      { kind: 'p', text: 'A program’s evaluation can be a single round or a graph of rounds connected by edges. AwardX ships two equivalent editors: a tile view for linear flows and a React Flow graph view for branching workflows.' },
+      { kind: 'h3', text: 'What a round configures' },
+      {
+        kind: 'list',
+        items: [
+          'Type — jury, public voting, shortlisting, nomination, announcement, or custom.',
+          'Evaluator strategy — which judges or audience evaluates this round.',
+          'Start condition — fixed datetime, after previous round, or manual trigger.',
+          'End condition — fixed datetime, manual close, or auto-close when a count is hit.',
+          'Shortlist — percentage or fixed count, with admin/judge/public visibility.',
+          'Edges — outgoing connections and their condition (always, if shortlisted, score threshold, manual approval).',
+        ],
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        title: 'Linear ↔ graph conversion is explicit',
+        text: 'Switching between tile (linear) and workflow (graph) views asks for confirmation before destructive overwrites, so a hand-authored branching graph is never silently flattened.',
+      },
+    ],
+  },
+  {
+    id: 'public-voting',
+    title: 'Public voting rounds',
+    category: 'Core Concepts',
+    icon: Vote,
+    description: 'Open a round to the public, collect votes, and surface a live leaderboard.',
+    blocks: [
+      { kind: 'p', text: 'Any round can be set to public voting. The program gets a shareable voting URL; visitors cast votes through PublicVotingPage with per-program rate-limiting and anti-abuse logic in the voting engine.' },
+      {
+        kind: 'list',
+        items: [
+          'Vote weight, per-IP limits, and identity requirements are configured on the round.',
+          'Results stream into LeaderboardView in the dashboard and into the program’s public leaderboard.',
+          'When the round ends, advancement uses the leaderboard cut-off rules to populate the next round.',
         ],
       },
     ],
   },
   {
-    id: 'rest-api',
-    title: 'REST & tRPC API',
-    category: 'Extending',
-    icon: Code2,
-    description: 'Programmatic access to every resource in AwardX.',
+    id: 'payments',
+    title: 'Paid entries',
+    category: 'Core Concepts',
+    icon: CreditCard,
+    description: 'Stripe, Razorpay, and PayPal — pick a gateway per program.',
     blocks: [
-      { kind: 'p', text: 'Every operation in the dashboard is available over HTTP. Authenticate with a Personal Access Token (Settings → API Keys) and call /api/v1/* with JSON.' },
+      { kind: 'p', text: 'A program can require a payment before a submission is accepted. The provider is configured per program via program_payment_configs and the gateway is selected at runtime.' },
       {
-        kind: 'code',
-        lang: 'bash',
-        text: `# List all programs in your org
-curl https://your-instance.com/api/v1/programs \\
-  -H "Authorization: Bearer awx_pat_..."
-
-# Create a submission
-curl -X POST https://your-instance.com/api/v1/programs/PROG_ID/submissions \\
-  -H "Authorization: Bearer awx_pat_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{ "title": "My Entry", "category": "design", "fields": { ... } }'`,
+        kind: 'list',
+        items: [
+          'Stripe — Checkout sessions for the broadest currency coverage.',
+          'Razorpay — Indian market with UPI, cards, and netbanking.',
+          'PayPal — classic Express Checkout flow.',
+          'Per-category fees — different fees for different entry categories in the same program.',
+        ],
       },
       {
         kind: 'callout',
-        tone: 'info',
-        title: 'tRPC for TypeScript clients',
-        text: 'If you are calling AwardX from another TS service, prefer the tRPC client at /api/trpc — you get end-to-end type safety with no codegen step.',
+        tone: 'warn',
+        title: 'Webhook security',
+        text: 'Each gateway’s webhook handler lives in api/_handlers and verifies the provider’s signature before mutating state. Do not bypass these handlers when adding a new gateway.',
       },
     ],
   },
   {
-    id: 'webhooks',
-    title: 'Webhooks',
-    category: 'Extending',
-    icon: Webhook,
-    description: 'Push events to your stack as they happen.',
+    id: 'communications',
+    title: 'Mass email & invites',
+    category: 'Core Concepts',
+    icon: Mail,
+    description: 'Resend-backed transactional and bulk email to applicants, judges, and team members.',
     blocks: [
-      { kind: 'p', text: 'Webhooks deliver lifecycle events to any HTTPS endpoint with HMAC-SHA256 signatures, exponential backoff, and a 14-day retention buffer.' },
+      { kind: 'p', text: 'AwardX uses Resend for outbound email. You can connect Resend at the organization level (covers every program) or per program (overrides the org connection for that program).' },
       {
-        kind: 'code',
-        lang: 'http',
-        text: `POST /your-webhook HTTP/1.1
-X-AwardX-Event: submission.created
-X-AwardX-Delivery: 7f3b...
-X-AwardX-Signature: sha256=...
-Content-Type: application/json
-
-{
-  "id": "sub_01HXY...",
-  "program_id": "prog_01HX...",
-  "title": "My Entry",
-  "created_at": "2026-06-08T10:23:01Z"
-}`,
+        kind: 'list',
+        items: [
+          'Team invites — invite an organization member with a role.',
+          'Judge invites — invite a judge to a specific program or panel.',
+          'Mass email — target a saved audience (judges, applicants, shortlisted) with a templated message.',
+          'Email logs — every delivery is recorded for audit and retries.',
+        ],
       },
     ],
   },
@@ -367,97 +434,129 @@ Content-Type: application/json
     title: 'Integrations',
     category: 'Extending',
     icon: Mail,
-    description: 'Email, WhatsApp, Stripe, Slack, Notion, and Zapier.',
+    description: 'External services AwardX talks to today.',
     blocks: [
       {
         kind: 'list',
         items: [
-          'Email — Resend, SendGrid, Postmark, or any SMTP server',
-          'WhatsApp Business — Cloud API for entry reminders and announcements',
-          'Payments — Stripe, Razorpay, or Paystack for paid entries',
-          'Slack & Discord — Real-time notifications via webhook',
-          'Notion — Mirror programs and submissions to a Notion database',
-          'Zapier & Make — 3000+ apps via the public API',
+          'Supabase — Postgres, auth, storage, realtime.',
+          'Resend — transactional and bulk email.',
+          'Stripe / Razorpay / PayPal — paid entries.',
+          'Sentry — frontend error reporting.',
+          'Redis (via ioredis) — optional server-side cache layer.',
+          'Vercel Analytics — page-level usage on the public marketing surface.',
         ],
-      },
-    ],
-  },
-  {
-    id: 'self-hosting',
-    title: 'Self-hosting in production',
-    category: 'Deployment',
-    icon: Cloud,
-    description: 'Docker, Kubernetes, and one-click templates.',
-    blocks: [
-      { kind: 'p', text: 'AwardX ships an official Docker image at ghcr.io/awardx/awardx. Pin to a specific tag in production (e.g. v2.4.1) — :latest is only safe for staging.' },
-      { kind: 'h3', text: 'Docker Compose (single host)' },
-      {
-        kind: 'code',
-        lang: 'yaml',
-        text: `services:
-  app:
-    image: ghcr.io/awardx/awardx:v2
-    environment:
-      DATABASE_URL: postgres://awardx:secret@db:5432/awardx
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: \${JWT_SECRET}
-    ports: ["3000:3000"]
-  db:
-    image: postgres:16
-    volumes: ["db:/var/lib/postgresql/data"]
-  redis:
-    image: redis:7
-volumes: { db: {} }`,
-      },
-      { kind: 'h3', text: 'Kubernetes' },
-      { kind: 'p', text: 'A Helm chart is available at oci://ghcr.io/awardx/charts/awardx. It provisions the web, api, worker, plus optional Postgres and Redis dependencies via Bitnami subcharts.' },
-      {
-        kind: 'callout',
-        tone: 'success',
-        title: 'One-click deploys',
-        text: 'We maintain official templates for Railway, Render, Fly.io, and DigitalOcean App Platform. See docs.awardx.dev/deploy for the buttons.',
-      },
-    ],
-  },
-  {
-    id: 'contributing',
-    title: 'Contributing',
-    category: 'Community',
-    icon: GitBranch,
-    description: 'Set up the repo, run tests, send a PR.',
-    blocks: [
-      { kind: 'p', text: 'AwardX welcomes contributions of every size — typos in docs, new locales, plugins, or major features. Start by reading CONTRIBUTING.md in the repo root.' },
-      { kind: 'h3', text: 'Local dev loop' },
-      {
-        kind: 'code',
-        lang: 'bash',
-        text: `pnpm dev          # web + api + worker, watched
-pnpm test         # unit + integration (Vitest + Playwright)
-pnpm lint         # eslint + prettier
-pnpm changeset    # before opening a PR that ships a release`,
       },
       {
         kind: 'callout',
         tone: 'info',
-        title: 'Good first issues',
-        text: 'Issues labelled good-first-issue are scoped to half a day or less and have a mentor assigned. Look for the green tag on GitHub.',
+        title: 'Connecting Resend',
+        text: 'Open Settings → Integrations to attach a Resend API key at the organization level. Switch to a specific program to override it just for that program.',
       },
     ],
   },
   {
-    id: 'community',
-    title: 'Community & support',
+    id: 'api',
+    title: 'API surface',
+    category: 'Extending',
+    icon: Code2,
+    description: 'How the dashboard, the Express server, and the serverless handlers fit together.',
+    blocks: [
+      { kind: 'p', text: 'There are three pieces of API surface in the repo. Most of what you build on top of AwardX will hit one of them; pick based on whether the call is privileged, public, or bursty.' },
+      {
+        kind: 'table',
+        headers: ['Surface', 'Where', 'When to use'],
+        rows: [
+          ['Express server', 'server/src/routes', 'Privileged mutations (advancement, judge assignment, schedule rounds, invites, mass email).'],
+          ['Serverless handlers', 'api/_handlers', 'Per-request endpoints — payment webhooks, submissions, scores, notifications.'],
+          ['Supabase JS client', 'services/database.ts', 'Direct reads (and writes the frontend is allowed to make under RLS).'],
+        ],
+      },
+      { kind: 'h3', text: 'Example: list a program’s rounds' },
+      {
+        kind: 'code',
+        lang: 'bash',
+        text: `# Direct Supabase read (gated by RLS)
+curl "$SUPABASE_URL/rest/v1/rounds?program_id=eq.PROGRAM_ID&select=*" \\
+  -H "apikey: $SUPABASE_ANON_KEY" \\
+  -H "Authorization: Bearer $USER_JWT"
+
+# Express server — advance a round (requires program-manager auth)
+curl -X POST "$API_BASE_URL/api/execution/rounds/ROUND_ID/advance" \\
+  -H "Authorization: Bearer $USER_JWT" \\
+  -H "Content-Type: application/json"`,
+      },
+    ],
+  },
+  {
+    id: 'deployment',
+    title: 'Deploying AwardX',
+    category: 'Deployment',
+    icon: Settings,
+    description: 'How the repo is wired up for hosting today.',
+    blocks: [
+      { kind: 'p', text: 'The frontend builds to a static bundle with Vite; the api/ folder is a set of serverless route handlers (Vercel-flavored); the Express server in /server is a long-running Node process you host wherever you can run Node 20+.' },
+      { kind: 'h3', text: 'What to deploy where' },
+      {
+        kind: 'list',
+        items: [
+          'Frontend — npm run build, then host the dist/ output on any static host (Vercel, Netlify, Cloudflare Pages).',
+          'Serverless handlers — api/ is picked up automatically by Vercel; see vercel.json at the repo root.',
+          'Express server — host on Fly.io, Render, Railway, a VPS, or any Node-friendly platform. It listens on PORT (default 5001).',
+          'Database — a Supabase project. Apply supabase/migrations/*.sql in order on a fresh project.',
+        ],
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        title: 'Production checklist',
+        text: 'Set every variable from the Environment section, point VITE_API_BASE_URL at the public Express URL, and double-check that RESEND_API_KEY and SUPABASE_SERVICE_ROLE_KEY are present only on the server.',
+      },
+    ],
+  },
+  {
+    id: 'testing',
+    title: 'Testing',
     category: 'Community',
-    icon: Users,
-    description: 'Discord, GitHub Discussions, security disclosures.',
+    icon: GitBranch,
+    description: 'Vitest for unit and integration tests, Playwright for end-to-end.',
+    blocks: [
+      {
+        kind: 'code',
+        lang: 'bash',
+        text: `# Unit + integration tests
+npm test                         # vitest in watch mode (see vitest.config.ts)
+npm run test -- --run            # one-shot run
+
+# Targeted suites
+npx vitest run tests/unit/scheduleRounds
+npx vitest run tests/integration/scheduleRounds
+
+# End-to-end
+npx playwright test              # see playwright.config.ts`,
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        title: 'Where the tests live',
+        text: 'tests/unit and tests/integration mirror the production folder layout. Schedule & rounds, advancement, and judge assignment have the deepest coverage; everything else has spot tests.',
+      },
+    ],
+  },
+  {
+    id: 'support',
+    title: 'Getting help',
+    category: 'Community',
+    icon: LifeBuoy,
+    description: 'Where to look when something is wrong.',
     blocks: [
       {
         kind: 'list',
         items: [
-          'Discord — discord.gg/awardx for real-time chat and weekly office hours',
-          'GitHub Discussions — long-form Q&A and RFCs',
-          'security@awardx.dev — coordinated disclosure for vulnerabilities (PGP available)',
-          'Twitter / X — @awardx_dev for release notes',
+          'Check Sentry (if VITE_SENTRY_DSN is set) for the matching frontend error.',
+          'Tail the Express server logs — most authorization failures are logged with the user and program IDs.',
+          'Inspect Supabase logs for failed RLS checks; they look like permission denied with the table name.',
+          'For mass email issues, the email_logs table records every send attempt and the Resend response.',
         ],
       },
     ],
@@ -573,12 +672,37 @@ export const DocsPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState<string>(sections[0].id);
   const [showSearch, setShowSearch] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const hasQuery = query.trim().length > 0;
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
     return mini.search(query, { fuzzy: 0.2, prefix: true }).slice(0, 8);
   }, [query, mini]);
+
+  // Items the keyboard cursor moves through: search results when querying,
+  // popular pages when empty. Mirrors UniversalSearchPalette's flat list.
+  const flatItems = useMemo(() => {
+    if (hasQuery) return results.map((r) => map.get(r.id as string)!).filter(Boolean);
+    return ['introduction', 'getting-started', 'schedule-rounds', 'judging']
+      .map((id) => map.get(id))
+      .filter((s): s is DocSection => Boolean(s));
+  }, [hasQuery, results, map]);
+
+  // Reset cursor whenever the visible set changes.
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, showSearch]);
+
+  // Keep the highlighted row in view as the user arrows through.
+  useEffect(() => {
+    if (!listRef.current) return;
+    const el = listRef.current.querySelector(`[data-index="${activeIndex}"]`);
+    if (el) (el as HTMLElement).scrollIntoView({ block: 'nearest' });
+  }, [activeIndex]);
 
   // Cmd/Ctrl + K to open search
   useEffect(() => {
@@ -628,125 +752,185 @@ export const DocsPage: React.FC = () => {
       {/* Page header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
         <div className="flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-indigo-600 mb-4">
-          <BookOpen className="w-4 h-4" /> AwardX Docs · v2.4
+          <BookOpen className="w-4 h-4" /> AwardX Docs
         </div>
         <h1 className="text-4xl md:text-6xl font-bold text-slate-900 font-display tracking-tight mb-4">
           Documentation
         </h1>
         <p className="text-lg text-slate-600 max-w-2xl">
-          Everything you need to install, configure, extend, and self-host AwardX. Open source,
-          MIT licensed, and powered by{' '}
-          <a href="https://github.com/lucaong/minisearch" target="_blank" rel="noreferrer" className="text-indigo-600 underline underline-offset-4 hover:text-indigo-800">
-            MiniSearch
-          </a>
-          .
+          How AwardX is structured, how to run it locally, and how to extend it.
+          Written against the current codebase — not a roadmap.
         </p>
 
-        {/* Search trigger */}
-        <button
-          onClick={() => {
-            setShowSearch(true);
-            setTimeout(() => searchInputRef.current?.focus(), 30);
-          }}
-          className="mt-8 flex items-center gap-3 w-full max-w-xl px-5 py-4 rounded-2xl bg-white border border-slate-200 shadow-sm hover:border-indigo-300 hover:shadow-md transition-all text-left group"
-        >
-          <Search className="w-5 h-5 text-slate-400 group-hover:text-indigo-500 transition-colors" />
-          <span className="flex-1 text-slate-400 group-hover:text-slate-600">Search docs &mdash; try "judging" or "webhook"</span>
-          <span className="hidden sm:flex items-center gap-1 text-xs text-slate-400 border border-slate-200 rounded-md px-2 py-1 font-mono">
-            <Command className="w-3 h-3" /> K
-          </span>
-        </button>
+        {/* Search trigger — matches the dashboard search bar */}
+        <div className="mt-8 max-w-xl">
+          <button
+            type="button"
+            onClick={() => {
+              setShowSearch(true);
+              setTimeout(() => searchInputRef.current?.focus(), 30);
+            }}
+            aria-label="Search documentation"
+            className="relative w-full group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
+          >
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors pointer-events-none" />
+            <div className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-400 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors flex items-center justify-between">
+              <span>Search docs &mdash; try &ldquo;judging&rdquo; or &ldquo;rounds&rdquo;</span>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono text-slate-500">&#8984;K</kbd>
+            </div>
+          </button>
+        </div>
       </div>
 
-      {/* Search modal */}
-      {showSearch && (
-        <div
-          className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-50 flex items-start justify-center pt-24 px-4"
-          onClick={() => setShowSearch(false)}
-        >
-          <div
-            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-              <Search className="w-5 h-5 text-slate-400" />
-              <input
-                ref={searchInputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search AwardX docs..."
-                className="flex-1 outline-none text-slate-900 placeholder:text-slate-400"
-              />
-              <button onClick={() => setShowSearch(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="max-h-[60vh] overflow-y-auto">
-              {query.trim() && results.length === 0 && (
-                <div className="px-5 py-10 text-center text-slate-400 text-sm">
-                  No matches for &ldquo;{query}&rdquo;. Try a broader keyword.
-                </div>
-              )}
-              {!query.trim() && (
-                <div className="px-5 py-6">
-                  <div className="text-xs font-bold tracking-widest uppercase text-slate-400 mb-3">Popular pages</div>
-                  <div className="space-y-1">
-                    {['introduction', 'plugins', 'rest-api', 'self-hosting'].map((id) => {
-                      const s = map.get(id)!;
-                      const Icon = s.icon;
-                      return (
-                        <button
-                          key={id}
-                          onClick={() => jumpTo(id)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-50 text-left"
-                        >
-                          <Icon className="w-4 h-4 text-indigo-500" />
-                          <div className="flex-1">
-                            <div className="text-sm font-semibold text-slate-900">{s.title}</div>
-                            <div className="text-xs text-slate-500">{s.description}</div>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {results.map((r) => {
-                const section = map.get(r.id as string)!;
-                const Icon = section.icon;
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => jumpTo(r.id as string)}
-                    className="w-full flex items-start gap-3 px-5 py-4 hover:bg-indigo-50/50 text-left border-b border-slate-50 last:border-0 transition-colors"
-                  >
-                    <div className="shrink-0 w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                      <Icon className="w-4 h-4" />
+      {/* Search palette — mirrors UniversalSearchPalette in the dashboard */}
+      <AnimatePresence>
+        {showSearch && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[9998] bg-slate-950/40 backdrop-blur-[8px]"
+              onClick={() => setShowSearch(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: -16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -16 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+              className="fixed inset-x-0 top-[12vh] z-[9999] mx-auto w-full max-w-2xl px-4"
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setActiveIndex((i) => Math.min(i + 1, flatItems.length - 1));
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setActiveIndex((i) => Math.max(i - 1, 0));
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const target = flatItems[activeIndex];
+                  if (target) jumpTo(target.id);
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setShowSearch(false);
+                }
+              }}
+            >
+              {/* Detached search input pill */}
+              <div className="flex items-center gap-4 rounded-full border border-white/40 bg-white/75 backdrop-blur-xl px-6 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-white/10 transition-all duration-300 focus-within:ring-indigo-500/20 focus-within:border-indigo-500/30">
+                <Search className="h-5 w-5 shrink-0 text-indigo-500" />
+                <input
+                  ref={searchInputRef}
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search the docs..."
+                  className="flex-1 bg-transparent border-0 shadow-none outline-none focus:outline-none focus:ring-0 focus:border-transparent focus:shadow-none text-[17px] text-slate-900 placeholder:text-slate-400 font-medium"
+                  style={{ border: 'none', background: 'transparent', boxShadow: 'none', outline: 'none' }}
+                />
+                <kbd className="hidden sm:inline-flex h-6 items-center rounded-lg border border-slate-200 bg-slate-50/50 px-2.5 text-[9px] font-extrabold text-slate-400 tracking-widest">
+                  ESC
+                </kbd>
+              </div>
+
+              {/* Detached results panel */}
+              <div className="mt-4 overflow-hidden rounded-[28px] border border-white/30 bg-white/75 backdrop-blur-xl shadow-[0_32px_60px_-15px_rgba(0,0,0,0.25)] ring-1 ring-white/10">
+                <div ref={listRef} className="max-h-[50vh] overflow-y-auto overscroll-contain py-3 px-3 space-y-1">
+                  {!hasQuery && (
+                    <div className="px-5 py-10 text-center">
+                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-50/60 to-purple-50/60 shadow-inner">
+                        <Sparkles className="h-6 w-6 text-indigo-500" />
+                      </div>
+                      <p className="text-base font-bold text-slate-800">Search the documentation</p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Jump to any section — environment, judging, rounds, payments, deployment.
+                      </p>
+                      <div className="mt-6 flex items-center justify-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-slate-100/50 pt-5 max-w-sm mx-auto">
+                        <span className="flex items-center gap-1.5"><ArrowUp className="h-3.5 w-3.5" /><ArrowDown className="h-3.5 w-3.5" /> Navigate</span>
+                        <span className="flex items-center gap-1.5"><CornerDownLeft className="h-3.5 w-3.5" /> Select</span>
+                        <span className="flex items-center gap-1.5">ESC Close</span>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-semibold text-slate-900">{section.title}</span>
-                        <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                          {section.category}
+                  )}
+
+                  {hasQuery && results.length === 0 && (
+                    <div className="px-5 py-12 text-center">
+                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50/40">
+                        <Search className="h-7 w-7 text-slate-300" />
+                      </div>
+                      <p className="text-base font-bold text-slate-800">No results found</p>
+                      <p className="mt-1 text-sm text-slate-500">We couldn&rsquo;t find anything matching &ldquo;{query}&rdquo;.</p>
+                    </div>
+                  )}
+
+                  {flatItems.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="px-4 py-2 mt-1">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                          {hasQuery ? 'Results' : 'Popular pages'}
                         </span>
                       </div>
-                      <div className="text-xs text-slate-500 truncate">{section.description}</div>
+                      {flatItems.map((section, idx) => {
+                        const Icon = section.icon;
+                        const isActive = activeIndex === idx;
+                        return (
+                          <button
+                            key={section.id}
+                            data-index={idx}
+                            type="button"
+                            onClick={() => jumpTo(section.id)}
+                            onMouseEnter={() => setActiveIndex(idx)}
+                            className={`group flex w-full items-center gap-4 px-4 py-3 text-left rounded-2xl transition-all duration-200 ${
+                              isActive
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 scale-[1.01]'
+                                : 'text-slate-700 hover:bg-slate-50/50 hover:scale-[1.005]'
+                            }`}
+                          >
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                                isActive
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-indigo-50/50 text-indigo-500 group-hover:bg-indigo-100/50'
+                              } [&>svg]:h-5 [&>svg]:w-5`}
+                            >
+                              <Icon />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className={`truncate text-[15px] font-bold ${isActive ? 'text-white' : 'text-slate-800'}`}>
+                                {section.title}
+                              </div>
+                              <div className={`mt-0.5 truncate text-[13px] ${isActive ? 'text-indigo-100' : 'text-slate-500'}`}>
+                                {section.description}
+                              </div>
+                            </div>
+                            {isActive && (
+                              <CornerDownLeft className="h-4 w-4 shrink-0 text-white opacity-90" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 mt-2" />
-                  </button>
-                );
-              })}
-            </div>
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 text-xs text-slate-500 flex items-center justify-between">
-              <span>{results.length > 0 ? `${results.length} result${results.length === 1 ? '' : 's'}` : 'Powered by MiniSearch'}</span>
-              <span className="flex items-center gap-3">
-                <kbd className="font-mono">↵</kbd> open · <kbd className="font-mono">esc</kbd> close
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+                  )}
+                </div>
+
+                {hasQuery && results.length > 0 && (
+                  <div className="flex items-center justify-between border-t border-slate-200/30 bg-slate-50/30 px-5 py-3">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {results.length} result{results.length !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      <span className="flex items-center gap-1.5"><ArrowUp className="h-3.5 w-3.5" /><ArrowDown className="h-3.5 w-3.5" /> Navigate</span>
+                      <span className="flex items-center gap-1.5"><CornerDownLeft className="h-3.5 w-3.5" /> Open</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Body grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-12">
@@ -779,16 +963,6 @@ export const DocsPage: React.FC = () => {
               </div>
             ))}
 
-            <div className="pt-4 border-t border-slate-100">
-              <a
-                href="https://github.com/awardx/awardx"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 px-2.5 py-2 text-sm text-slate-600 hover:text-slate-900"
-              >
-                <Github className="w-4 h-4" /> Edit on GitHub <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
           </nav>
         </aside>
 
@@ -818,25 +992,18 @@ export const DocsPage: React.FC = () => {
           <div className="bg-slate-900 rounded-3xl p-10 text-white relative overflow-hidden mt-12">
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500/30 blur-[100px] rounded-full" />
             <div className="relative z-10">
-              <h3 className="text-2xl font-bold mb-3 font-display">Didn&rsquo;t find what you need?</h3>
+              <h3 className="text-2xl font-bold mb-3 font-display">Still stuck?</h3>
               <p className="text-slate-300 mb-6">
-                Open a question on GitHub Discussions or join the Discord. Maintainers and 340+ contributors answer most threads within a day.
+                Most issues line up with something concrete in the codebase. Check Sentry, the Express server logs, and Supabase RLS denials in that order &mdash; the section on Getting help walks through each.
               </p>
               <div className="flex flex-wrap gap-3">
-                <a
-                  href="https://github.com/awardx/awardx/discussions"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-slate-900 font-bold text-sm hover:bg-slate-100"
+                <button
+                  type="button"
+                  onClick={() => jumpTo('support')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white text-slate-900 font-bold text-sm hover:bg-slate-100 transition-colors"
                 >
-                  <Github className="w-4 h-4" /> Ask on GitHub
-                </a>
-                <a
-                  href="#"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/20 text-white font-bold text-sm hover:bg-white/10"
-                >
-                  Join Discord
-                </a>
+                  <LifeBuoy className="w-4 h-4" /> Read troubleshooting
+                </button>
               </div>
             </div>
           </div>

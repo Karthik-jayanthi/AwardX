@@ -37,6 +37,14 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = original; };
+  }, [isOpen]);
+
   // Focus trap + return focus on close
   useEffect(() => {
     if (isOpen) {
@@ -101,9 +109,10 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
               <div className="p-5 border-b border-border flex justify-between items-center">
                 <h3 id={titleId} className="text-lg font-semibold text-foreground tracking-tight">{title}</h3>
                 <button
+                  type="button"
                   onClick={onClose}
                   aria-label="Close dialog"
-                  className="p-2 hover:bg-accent rounded-md text-slate-500 hover:text-slate-900 transition-colors"
+                  className="p-2 hover:bg-accent rounded-md text-slate-500 hover:text-slate-900 transition-[background-color,color,transform] duration-150 ease-out active:scale-90 active:duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:active:scale-100"
                 >
                   <X className="w-5 h-5" />
                 </button>

@@ -776,9 +776,15 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                     <div className="pointer-events-none absolute inset-0 rounded-2xl bg-black/5 opacity-0 transition-opacity group-hover/image:opacity-100"></div>
                                  </div>
                                  <div className="min-w-0 space-y-0.5">
-                                    <div className="cursor-pointer text-[15px] font-extrabold text-slate-900 transition-colors group-hover:text-indigo-600" onClick={() => handleView(sub)}>
+                                    <button
+                                       type="button"
+                                       onClick={() => handleView(sub)}
+                                       title={sub.title}
+                                       className="text-left cursor-pointer text-[15px] font-extrabold text-slate-900 transition-colors group-hover:text-indigo-600 hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded line-clamp-1"
+                                       data-no-press
+                                    >
                                        {sub.title}
-                                    </div>
+                                    </button>
                                     <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
                                        <div className="w-1 h-1 rounded-full bg-slate-300"></div>
                                        {sub.applicant}

@@ -10,14 +10,27 @@ The Schedule & Rounds workflow engine is an enterprise-grade system for managing
 
 ```
 components/dashboard/scheduleRounds/
-├── ScheduleRoundsView.tsx      # Main container with view switcher
-├── WorkflowView.tsx            # React Flow-based node editor
-├── TileView.tsx                # Card-based summary view
-├── RoundNode.tsx               # Custom React Flow node component
-└── RoundConfigurationPanel.tsx # Round configuration modal/panel
+├── ScheduleRoundsView.tsx           # Main container with view switcher
+├── WorkflowView.tsx                 # React Flow-based node editor
+├── TileView.tsx                     # Card-based summary view
+├── SimpleRoundEditor.tsx            # Linear-mode editor
+├── RoundScheduler.tsx               # Scheduling controls
+├── RoundNode.tsx                    # Custom React Flow node component
+├── DataNode.tsx                     # Data source/sink node
+├── AddRoundSheet.tsx                # Sheet for adding a new round
+├── RoundConfigurationPanel.tsx      # Round configuration panel
+├── EdgeConfigurationPanel.tsx       # Edge configuration panel
+├── ConnectionModal.tsx              # Edge creation modal
+├── ContextMenu.tsx                  # Canvas/node context menu
+├── OutputPortConfigModal.tsx        # Output port configuration
+├── PublicVotingRoundSection.tsx     # Public voting round embed
+└── RepresentationConversionModal.tsx# Linear ↔ graph conversion guard
 
 types/
-└── scheduleRounds.ts           # TypeScript type definitions
+└── scheduleRounds.ts                # TypeScript type definitions
+
+services/
+└── scheduleRoundsDb.ts              # Persistence layer
 ```
 
 ### Data Models

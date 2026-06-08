@@ -15,10 +15,10 @@ export const Footer: React.FC = () => {
               <span className="text-xl font-bold text-white font-display">AwardX</span>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed mb-6">
-              The open-source operating system for awards, competitions, and creative recognition programs. MIT licensed &mdash; fork it, ship it, own it.
+              An award management system for running competitions, grants, and creative recognition programs &mdash; built in public on GitHub.
             </p>
             <div className="flex space-x-4">
-              <a href="https://github.com/awardx/awardx" target="_blank" rel="noreferrer" className="text-slate-400 hover:text-white transition-colors"><Github className="w-5 h-5"/></a>
+              <a href="https://github.com/Cognivo25/AwardX" target="_blank" rel="noreferrer" className="text-slate-400 hover:text-white transition-colors"><Github className="w-5 h-5"/></a>
               <a href="#" className="text-slate-400 hover:text-white transition-colors"><MessageCircle className="w-5 h-5"/></a>
               <a href="#" className="text-slate-400 hover:text-white transition-colors"><Twitter className="w-5 h-5"/></a>
               <a href="#" className="text-slate-400 hover:text-white transition-colors"><Linkedin className="w-5 h-5"/></a>
@@ -38,10 +38,9 @@ export const Footer: React.FC = () => {
           <div>
             <h4 className="text-white font-semibold mb-6">Open Source</h4>
             <ul className="space-y-4 text-sm text-slate-400">
-              <li><a href="https://github.com/awardx/awardx" target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">GitHub Repository</a></li>
-              <li><a href="#" className="hover:text-cyan-400 transition-colors">Contributing Guide</a></li>
-              <li><a href="#" className="hover:text-cyan-400 transition-colors">Roadmap</a></li>
-              <li><a href="#" className="hover:text-cyan-400 transition-colors">MIT License</a></li>
+              <li><a href="https://github.com/Cognivo25/AwardX" target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">GitHub Repository</a></li>
+              <li><a href="https://github.com/Cognivo25/AwardX/issues" target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">Issues</a></li>
+              <li><a href="https://github.com/Cognivo25/AwardX/pulls" target="_blank" rel="noreferrer" className="hover:text-cyan-400 transition-colors">Pull Requests</a></li>
             </ul>
           </div>
 
@@ -58,7 +57,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
-          <p>&copy; {new Date().getFullYear()} AwardX &mdash; Released under the MIT License. Built by the community.</p>
+          <p>&copy; {new Date().getFullYear()} AwardX &mdash; Built in public on GitHub.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">
             <a href="#" className="hover:text-white">Privacy</a>
             <a href="#" className="hover:text-white">Code of Conduct</a>

@@ -23,9 +23,9 @@ export const Hero: React.FC = () => {
 
   const phrases = [
     "Awards Programs",
-    "Open Source Recognition",
     "Creative Competitions",
-    "Community Hackathons"
+    "Grants & Funding",
+    "Recognition Cycles",
   ];
 
 
@@ -82,7 +82,7 @@ export const Hero: React.FC = () => {
             transition={{ duration: 0.6 }}
           >
             <a
-              href="https://github.com/awardx/awardx"
+              href="https://github.com/Cognivo25/AwardX"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center px-4 py-1.5 rounded-full border border-indigo-100 bg-white/80 backdrop-blur-sm text-indigo-700 text-sm font-bold tracking-wide mb-8 shadow-sm hover:border-indigo-300 hover:shadow transition-all"
@@ -91,7 +91,7 @@ export const Hero: React.FC = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
               </span>
-              100% OPEN SOURCE · MIT LICENSED
+              SOURCE AVAILABLE · BUILT IN PUBLIC
               <ArrowRight className="w-3.5 h-3.5 ml-2" />
             </a>
 
@@ -104,23 +104,28 @@ export const Hero: React.FC = () => {
             </h1>
 
             <p className="mt-4 text-lg md:text-xl text-slate-600 mb-8 leading-relaxed max-w-2xl mx-auto lg:mx-0 font-medium">
-              The open-source award management system. Launch world-class programs,
-              automate judging, and own every byte of your data &mdash; self-host or contribute.
+              The award management system for running serious programs &mdash; entry intake,
+              multi-round judging, public voting, and winner announcement, all in one
+              workspace.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-4 sm:space-y-0 sm:space-x-4">
-              <Button variant="primary" size="lg" className="w-full sm:w-auto font-bold shadow-indigo-500/25 rounded-full px-8">
-                <Github className="mr-2 w-4 h-4" /> Star on GitHub
-                <span className="ml-3 pl-3 border-l border-white/20 inline-flex items-center text-xs"><Star className="w-3 h-3 mr-1 fill-current" /> 12.4k</span>
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full sm:w-auto font-bold shadow-indigo-500/25 rounded-full px-8"
+                onClick={() => window.open('https://github.com/Cognivo25/AwardX', '_blank', 'noreferrer')}
+              >
+                <Github className="mr-2 w-4 h-4" /> View on GitHub
               </Button>
               <Button variant="white" size="lg" className="w-full sm:w-auto font-bold rounded-full px-8">
                 <Play className="mr-2 w-4 h-4 fill-slate-900" /> Live Demo
               </Button>
             </div>
 
-            {/* Glass meta strip */}
+            {/* Stack chips — grounded in package.json + server/package.json */}
             <div className="mt-6 inline-flex items-center gap-2 flex-wrap">
-              {['MIT License', 'TypeScript', 'Self-hosted', 'Postgres'].map((t) => (
+              {['React 19', 'TypeScript', 'Supabase', 'Tailwind v4'].map((t) => (
                 <span
                   key={t}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/50 backdrop-blur-xl border border-white/60 text-xs font-semibold text-slate-700 shadow-sm"
@@ -129,19 +134,6 @@ export const Hero: React.FC = () => {
                   {t}
                 </span>
               ))}
-            </div>
-
-            <div className="mt-10 flex items-center justify-center lg:justify-start space-x-6 text-sm text-slate-500">
-              <div className="flex -space-x-2">
-                {['A','B','C','D'].map((_, i) => (
-                  <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <span className="font-bold text-slate-900">340+</span> contributors building together
-              </div>
             </div>
           </motion.div>
 
@@ -239,17 +231,17 @@ export const Hero: React.FC = () => {
             <motion.div style={{ y: y2 }} className="absolute -top-10 -right-10 z-20">
               <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-white/50 w-56 animate-float">
                 <div className="flex items-center gap-4 mb-3">
-                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600">
+                  <div className="p-2.5 bg-emerald-100 rounded-xl text-emerald-600">
                     <Star size={20} className="fill-current" />
                   </div>
                   <div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">GitHub Stars</div>
-                    <div className="text-sm font-bold text-slate-900">12,432 <span className="text-emerald-600 text-xs font-semibold">+128 this week</span></div>
+                    <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Live Voting</div>
+                    <div className="text-sm font-bold text-slate-900">Round 3 <span className="text-emerald-600 text-xs font-semibold">open</span></div>
                   </div>
                 </div>
                 <div className="flex gap-1">
                   {[...Array(12)].map((_, i) => (
-                    <div key={i} className="flex-1 h-6 bg-gradient-to-t from-amber-400 to-amber-200 rounded-sm" style={{ opacity: 0.4 + (i / 24) }} />
+                    <div key={i} className="flex-1 h-6 bg-gradient-to-t from-emerald-400 to-emerald-200 rounded-sm" style={{ opacity: 0.4 + (i / 24) }} />
                   ))}
                 </div>
               </div>

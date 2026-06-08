@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Sparkles, LayoutDashboard, LogOut, Github, Star } from 'lucide-react';
+import { Menu, X, Sparkles, LayoutDashboard, LogOut, Github } from 'lucide-react';
 import { Button } from './Button';
 import { motion, useScroll } from 'framer-motion';
 import { db } from '../services/database';
@@ -206,16 +206,14 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
             ) : (
               <>
                 <a
-                  href="https://github.com/awardx/awardx"
+                  href="https://github.com/Cognivo25/AwardX"
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-white/50 rounded-full transition-colors border border-white/30"
                   title="View on GitHub"
                 >
                   <Github className="w-3.5 h-3.5" />
-                  <span className="flex items-center gap-0.5">
-                    <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" /> 12.4k
-                  </span>
+                  <span>GitHub</span>
                 </a>
                 <button
                   onClick={() => handleNavClick('login')}
@@ -292,12 +290,12 @@ export const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage, onLogou
                   <LayoutDashboard className="w-4 h-4 mr-2" /> Open Demo
                 </Button>
                 <a
-                  href="https://github.com/awardx/awardx"
+                  href="https://github.com/Cognivo25/AwardX"
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2 text-sm font-medium text-slate-700 px-4 py-2 rounded-lg border border-slate-200 bg-white"
                 >
-                  <Github className="w-4 h-4" /> GitHub · 12.4k stars
+                  <Github className="w-4 h-4" /> View on GitHub
                 </a>
                 <Button variant="outline" className="w-full justify-center" onClick={() => handleNavClick('login')}>Login</Button>
                 <Button variant="primary" className="w-full justify-center" onClick={() => handleNavClick('signup')}>Self Host</Button>

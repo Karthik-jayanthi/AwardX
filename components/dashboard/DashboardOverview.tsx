@@ -206,18 +206,18 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
           </p>
         </div>
         <div className="flex-1 max-w-md">
-          <div
-            className="relative cursor-pointer group"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('open-universal-search'));
-            }}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-universal-search'))}
+            aria-label="Open universal search"
+            className="relative w-full group focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
           >
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors" />
-            <div className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-400 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer flex items-center justify-between">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors pointer-events-none" />
+            <div className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-400 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors flex items-center justify-between">
               <span>Search programs, submissions...</span>
               <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono text-slate-500">&#8984;K</kbd>
             </div>
-          </div>
+          </button>
         </div>
         <div className="flex gap-3">
           <button
@@ -285,9 +285,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ activeEven
                   <h3 className="font-bold text-slate-900 text-lg">
                     {activeEvent?.type === 'Grants & Funding' || activeEvent?.type === 'Grant' ? 'Application Volume' : 'Submission Trends'}
                   </h3>
-                  <select className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-1.5 text-slate-600 outline-none">
-                    <option>Last 7 Days</option>
-                  </select>
+                  <span className="bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-1.5 text-slate-600">
+                    Last 7 Days
+                  </span>
                 </div>
                 <div className="h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">

@@ -1,5 +1,10 @@
 # Mobile App Feature Set
 
+> **Status: Specification only.** No mobile app exists in this repository. This
+> document captures the intended feature set for a future native client. Treat
+> every item below as planned, not shipped. The current product is the web app
+> documented in [WEB_APP_FEATURES.md](./WEB_APP_FEATURES.md).
+
 ## Core Experience
 - Secure sign-in and session management
 - Workspace switcher (program-based)

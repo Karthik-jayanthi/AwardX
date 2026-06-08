@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { createPortal } from 'react-dom';
 import { db } from '../../services/database';
 import { Category, Program } from '../../services/models';
-import { Folder, ChevronRight, Plus, MoreHorizontal, FileText, Trash2, Edit2, ChevronDown, List, Workflow, LayoutGrid } from 'lucide-react';
+import { Folder, ChevronRight, Plus, FileText, Trash2, ChevronDown, List, Workflow, LayoutGrid } from 'lucide-react';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
 import { useConfirm } from '../ConfirmDialog';
@@ -71,19 +71,19 @@ const CategoryItem: React.FC<CategoryItemProps> = ({ category, allCategories, le
                   <FileText className="w-3 h-3" /> {category.entriesCount}
                </span>
                <button
+                  type="button"
                   onClick={() => onAddSub(category.id)}
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                  title="Add Subcategory"
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                  title="Add subcategory"
+                  aria-label={`Add subcategory under ${category.title}`}
                >
                   <Plus className="w-3.5 h-3.5" />
                </button>
-               <button className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded">
-                  <Edit2 className="w-3.5 h-3.5" />
-               </button>
                <button
+                  type="button"
                   onClick={() => onDelete(category.id)}
-                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                  title="Delete Category"
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
+                  title="Delete category"
                   aria-label={`Delete ${category.title}`}
                >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -150,14 +150,13 @@ const CategoryCard: React.FC<CategoryCardProps> = ({ category, allCategories, on
             </div>
             <div className="flex items-center gap-2">
                <button
+                  type="button"
                   onClick={() => onDelete(category.id)}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Delete Category"
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1"
+                  title="Delete category"
+                  aria-label={`Delete ${category.title}`}
                >
                   <Trash2 className="w-5 h-5" />
-               </button>
-               <button className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100">
-                  <MoreHorizontal className="w-5 h-5" />
                </button>
             </div>
          </div>

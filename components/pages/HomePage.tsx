@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Github, Star, BookOpen, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Github, BookOpen, ArrowRight } from 'lucide-react';
 import { Hero } from '../Hero';
 import { FeatureScroll } from '../FeatureScroll';
 import { ProductShowcase } from '../ProductShowcase';
@@ -31,39 +32,35 @@ const CTASection = () => (
         <div className="relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-indigo-300 text-xs font-bold tracking-widest uppercase mb-8">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            MIT Licensed · Forever Free
+            Built in public on GitHub
           </div>
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-8 tracking-tight font-display">
             Clone the repo. <br />Run your awards.
           </h2>
           <p className="text-lg md:text-xl text-slate-300 mb-12 max-w-2xl mx-auto">
-            AwardX is open source under the MIT license. No seats, no plans, no gatekeeping &mdash;
-            just a serious platform for serious programs.
+            Vite frontend, Express API, Supabase backend &mdash; the whole stack lives in one repo.
+            Read the docs first, then fork it.
           </p>
           <div className="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
             <a
-              href="https://github.com/awardx/awardx"
+              href="https://github.com/Cognivo25/AwardX"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 px-10 py-4 text-lg font-bold rounded-full bg-white text-slate-900 hover:bg-slate-100 transition-colors shadow-xl"
             >
-              <Github className="w-5 h-5" /> Star on GitHub
-              <span className="pl-3 ml-2 border-l border-slate-200 inline-flex items-center gap-1 text-sm">
-                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> 12.4k
-              </span>
+              <Github className="w-5 h-5" /> View on GitHub
             </a>
-            <Button
-              variant="outline"
-              size="lg"
-              className="px-10 py-4 text-lg border-slate-600 text-slate-300 hover:text-white hover:border-white rounded-full inline-flex items-center justify-center gap-2"
-            >
-              <BookOpen className="w-5 h-5" /> Read the Docs
-              <ArrowRight className="w-4 h-4" />
-            </Button>
+            <Link to="/docs">
+              <Button
+                variant="outline"
+                size="lg"
+                className="px-10 py-4 text-lg border-slate-600 text-slate-300 hover:text-white hover:border-white rounded-full inline-flex items-center justify-center gap-2"
+              >
+                <BookOpen className="w-5 h-5" /> Read the Docs
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
           </div>
-          <p className="mt-8 text-sm text-slate-500">
-            Prefer managed hosting? <a href="#" className="text-indigo-300 hover:text-white underline underline-offset-4">Join the AwardX Cloud waitlist &rarr;</a>
-          </p>
         </div>
       </motion.div>
     </div>
