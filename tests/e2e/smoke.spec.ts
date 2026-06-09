@@ -6,12 +6,8 @@ test('marketing home renders', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle(/Awards/i);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  if (isLandingOnly) {
-    await expect(page.getByRole('link', { name: 'View on GitHub' }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Get Started' })).toHaveCount(0);
-  } else {
-    await expect(page.getByRole('button', { name: 'Get Started' })).toBeVisible();
-  }
+  await expect(page.getByRole('link', { name: 'View GitHub' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Get Started' })).toHaveCount(0);
 });
 
 test('dashboard route is blocked in landing-only mode', async ({ page }) => {
