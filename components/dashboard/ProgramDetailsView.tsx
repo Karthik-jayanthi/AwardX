@@ -629,7 +629,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                             title="Cover Image"
                             description="The hero background visitors see first"
                         >
-                            {coverImage ? (
+                            {coverImage && /^https?:\/\//i.test(coverImage) ? (
                                 <div className="relative rounded-xl overflow-hidden h-48 bg-slate-100 group">
                                     <img
                                         src={coverImage}
