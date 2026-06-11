@@ -601,12 +601,12 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                                                 requireGithubAuth: !formData.requireGithubAuth,
                                             })
                                         }
-                                        className={`relative h-7 w-12 rounded-full transition-colors ${
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                                             formData.requireGithubAuth ? 'bg-indigo-600' : 'bg-slate-300'
                                         }`}
                                     >
                                         <span
-                                            className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+                                            className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
                                                 formData.requireGithubAuth ? 'translate-x-6' : 'translate-x-1'
                                             }`}
                                         />
