@@ -374,6 +374,13 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             return;
         }
 
+        const pendingEmails = new Set(pendingInvites.map((i: any) => (i.email || '').toLowerCase().trim()));
+        const alreadyPending = dedupedEmails.filter(e => pendingEmails.has(e));
+        if (alreadyPending.length > 0) {
+            toast.error(`${alreadyPending.slice(0, 2).join(', ')}${alreadyPending.length > 2 ? '…' : ''} already has a pending invite.`);
+            return;
+        }
+
         setIsBulkInviting(true);
 
         const failed: string[] = [];
