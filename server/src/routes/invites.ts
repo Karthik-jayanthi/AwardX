@@ -858,6 +858,27 @@ router.post('/team', async (req, res) => {
 			return res.status(403).json({ error: 'Insufficient permissions to send team invites' });
 		}
 
+		// Check if the user is already an active member of this organization.
+		const { data: existingUser } = await supabase
+			.from('profiles')
+			.select('id')
+			.ilike('email', normalizedEmail)
+			.maybeSingle();
+
+		if (existingUser) {
+			const { data: member } = await supabase
+				.from('organization_members')
+				.select('id')
+				.eq('organization_id', resolvedOrgId)
+				.eq('user_id', existingUser.id)
+				.eq('status', 'active')
+				.maybeSingle();
+
+			if (member) {
+				return res.status(400).json({ error: 'This user is already an active member of the team.' });
+			}
+		}
+
 		const ip = getClientIp(req);
 		const ipRateLimit = enforceRateLimit(`team-invite:${ip}`, 10, 15 * 60 * 1000);
 		if (!ipRateLimit.ok) {

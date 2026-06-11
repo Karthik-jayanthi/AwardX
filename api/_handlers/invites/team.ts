@@ -107,6 +107,28 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
+    // Check if the user is already an active member of this organization.
+    const { data: existingUser } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('email', normalizedEmail)
+      .maybeSingle();
+
+    if (existingUser) {
+      const { data: member } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', resolvedOrganizationId)
+        .eq('user_id', existingUser.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (member) {
+        res.status(400).json({ error: 'This user is already an active member of the team.' });
+        return;
+      }
+    }
+
     const actorRateLimit = enforceRateLimit(`team-invite:${resolvedOrganizationId}:${auth.user.id}`, 30, 15 * 60 * 1000);
     if (!actorRateLimit.ok) {
       res.setHeader('Retry-After', String(actorRateLimit.retryAfterSeconds));

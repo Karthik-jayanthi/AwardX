@@ -365,6 +365,13 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
             return;
         }
 
+        const activeEmails = new Set(members.map(m => m.email.toLowerCase().trim()));
+        const alreadyActive = dedupedEmails.filter(e => activeEmails.has(e));
+        if (alreadyActive.length > 0) {
+            toast.error(`${alreadyActive.slice(0, 2).join(', ')}${alreadyActive.length > 2 ? '…' : ''} is already an active member of the team.`);
+            return;
+        }
+
         setIsBulkInviting(true);
 
         const failed: string[] = [];
