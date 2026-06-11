@@ -71,6 +71,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
     const [inviteScope, setInviteScope] = useState<'program' | 'organization'>('program');
     const [isBulkInviting, setIsBulkInviting] = useState(false);
     const [memberSearch, setMemberSearch] = useState('');
+    const [roleFilter, setRoleFilter] = useState('');
+    const [roleFilterOpen, setRoleFilterOpen] = useState(false);
     const [memberPage, setMemberPage] = useState(1);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [resendingId, setResendingId] = useState<string | null>(null);
@@ -486,10 +488,14 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
         }))
     ].sort((a, b) => a.sortName.localeCompare(b.sortName));
 
-    const memberTotalPages = Math.max(1, Math.ceil(mergedItems.length / membersPerPage));
-    const paginatedItems = mergedItems.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
+    const filteredByRole = roleFilter
+        ? mergedItems.filter(item => item.role.toLowerCase() === roleFilter.toLowerCase())
+        : mergedItems;
 
-    useEffect(() => { setMemberPage(1); }, [memberSearch]);
+    const memberTotalPages = Math.max(1, Math.ceil(filteredByRole.length / membersPerPage));
+    const paginatedItems = filteredByRole.slice((memberPage - 1) * membersPerPage, memberPage * membersPerPage);
+
+    useEffect(() => { setMemberPage(1); }, [memberSearch, roleFilter]);
 
     if (!activeEvent) {
         return (
@@ -558,9 +564,33 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ activeEvent }) => {
                                         className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
                                 </div>
-                                <button className="flex items-center justify-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white hover:bg-slate-50 text-slate-600 w-full sm:w-auto">
-                                    <Filter className="w-4 h-4" /> Role
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setRoleFilterOpen(!roleFilterOpen)}
+                                        className={`flex items-center justify-center gap-2 px-3 py-2 border rounded-lg text-sm bg-white hover:bg-slate-50 w-full sm:w-auto ${roleFilter ? 'border-indigo-300 text-indigo-700' : 'border-slate-200 text-slate-600'}`}
+                                    >
+                                        <Filter className="w-4 h-4" /> {roleFilter || 'Role'}
+                                        {roleFilter && (
+                                            <span
+                                                onClick={(e) => { e.stopPropagation(); setRoleFilter(''); setRoleFilterOpen(false); }}
+                                                className="ml-1 text-slate-400 hover:text-slate-600"
+                                            >×</span>
+                                        )}
+                                    </button>
+                                    {roleFilterOpen && (
+                                        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[140px]">
+                                            {roles.map((r) => (
+                                                <button
+                                                    key={r.id}
+                                                    onClick={() => { setRoleFilter(r.name); setRoleFilterOpen(false); }}
+                                                    className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${roleFilter === r.name ? 'text-indigo-700 font-medium' : 'text-slate-700'}`}
+                                                >
+                                                    {r.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="px-4 pt-3 text-xs text-slate-500 md:hidden">Swipe horizontally to view all columns.</div>
