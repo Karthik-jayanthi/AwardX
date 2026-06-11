@@ -938,8 +938,8 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                               </span>
                            </th>
                         ))}
-                        <th className="p-5 whitespace-nowrap">Category</th>
-                        <th className="p-5 whitespace-nowrap">Status</th>
+                        {/* <th className="p-5 whitespace-nowrap">Category</th>
+                        <th className="p-5 whitespace-nowrap">Status</th> */}
                         <th className="p-5 whitespace-nowrap">Judges</th>
                         <th className="p-5 whitespace-nowrap">Score</th>
                         <th className="p-5 whitespace-nowrap">Date</th>
@@ -1008,14 +1008,14 @@ export const SubmissionTable: React.FC<SubmissionTableProps> = ({ activeEvent, o
                                  {renderFieldCell(column.type, responses[column.id])}
                               </td>
                            ))}
-                           <td className="p-5">
+                           {/* <td className="p-5">
                               <div className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm shadow-slate-50">
                                  {sub.category}
                               </div>
                            </td>
                            <td className="p-5">
                               <StatusBadge status={sub.status} />
-                           </td>
+                           </td> */}
                            <td className="p-5">
                               <div className="flex items-center -space-x-2">
                                  {(sub.assignedJudges || []).length > 0 ? (
