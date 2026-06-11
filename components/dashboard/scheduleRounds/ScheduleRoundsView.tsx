@@ -25,6 +25,7 @@ import {
 import {
   activateRound,
   completeRound,
+  promoteRound,
   executeAdvancement,
   previewAdvancement,
   type AdvancementPreview,
@@ -564,7 +565,22 @@ export const ScheduleRoundsView: React.FC<ScheduleRoundsViewProps> = ({
         }
 
         if (round.status === 'completed' && !round.isFinalized) {
+          if (round.type === 'Nomination') {
+            const result = await promoteRound(roundId);
+            if (!result.ok) throw new Error(result.error || 'Could not promote round');
+            toast.success(`Promoted "${round.name}" — ${result.enrolled || 0} submissions enrolled for new cycle`);
+            await loadWorkflow();
+            return;
+          }
           await openAdvancementPreview(round);
+          return;
+        }
+
+        if (round.isFinalized && round.type === 'Nomination') {
+          const result = await promoteRound(roundId);
+          if (!result.ok) throw new Error(result.error || 'Could not promote round');
+          toast.success(`Promoted "${round.name}" — ${result.enrolled || 0} submissions enrolled for new cycle`);
+          await loadWorkflow();
           return;
         }
       } catch (error) {

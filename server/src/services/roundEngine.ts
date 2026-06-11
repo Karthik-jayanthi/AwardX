@@ -190,6 +190,46 @@ export async function cancelRound(roundId: string, triggeredBy: string = 'admin'
 }
 
 /**
+ * Promote a Nomination round: reset it to draft and re-enroll all current submissions.
+ * This allows a fresh nomination cycle to begin with all submissions (including new ones).
+ */
+export async function promoteRound(roundId: string, triggeredBy: string = 'admin'): Promise<{ ok: boolean; enrolled?: number; error?: string }> {
+  const round = await getRound(roundId);
+  if (!round) return { ok: false, error: 'Round not found' };
+
+  if (round.type !== 'Nomination') {
+    return { ok: false, error: 'Promote is only available for Nomination rounds.' };
+  }
+
+  if (round.status !== 'completed' && !round.is_finalized) {
+    return { ok: false, error: 'Round must be completed or finalized to promote.' };
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  // Clear existing enrollments
+  await supabase.from('round_submissions').delete().eq('round_id', roundId);
+
+  // Fetch all program submissions and enroll them
+  const { data: subs } = await supabase
+    .from('submissions')
+    .select('id')
+    .eq('program_id', round.program_id);
+
+  const enrolled = subs?.length || 0;
+  if (enrolled > 0) {
+    const rows = subs!.map(s => ({ round_id: roundId, submission_id: s.id, status: 'active' }));
+    await supabase.from('round_submissions').upsert(rows, { onConflict: 'round_id,submission_id' });
+  }
+
+  // Reset round status to draft and un-finalize
+  await supabase.from('rounds').update({ status: 'draft', is_finalized: false }).eq('id', roundId);
+  await logTransition(roundId, round.status, 'draft', triggeredBy);
+
+  return { ok: true, enrolled };
+}
+
+/**
  * Get detailed status for a round including submission counts and scoring progress.
  */
 export async function getRoundStatus(roundId: string) {

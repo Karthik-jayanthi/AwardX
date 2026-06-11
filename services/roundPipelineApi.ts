@@ -36,6 +36,13 @@ export async function completeRound(roundId: string) {
   return postRoundAction(`/api/execution/rounds/${encodeURIComponent(roundId)}/complete`);
 }
 
+export async function promoteRound(roundId: string) {
+  return fetchBackendJson<{ ok: boolean; enrolled?: number; error?: string }>(
+    `/api/execution/rounds/${encodeURIComponent(roundId)}/promote`,
+    { method: 'POST', requireAuth: true, errorPrefix: 'Round API' },
+  );
+}
+
 export async function previewAdvancement(roundId: string, criteriaOverride?: AdvancementCriteria) {
   const response = await fetchBackendJson<{ data: AdvancementPreview }>(
     `/api/advancement/rounds/${encodeURIComponent(roundId)}/preview`,

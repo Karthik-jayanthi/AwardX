@@ -5,6 +5,7 @@ import {
   completeRound,
   finalizeRound,
   cancelRound,
+  promoteRound,
   getRound,
   getRoundStatus,
   getPipelineStatus,
@@ -97,6 +98,26 @@ router.post('/rounds/:roundId/cancel', requireAuth, async (req: AuthenticatedReq
     await invalidateRound(round.program_id);
 
     return res.json({ ok: true });
+  } catch (error: any) {
+    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
+  }
+});
+
+router.post('/rounds/:roundId/promote', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { roundId } = req.params;
+  try {
+    const round = await getRound(roundId);
+    if (!round) return res.status(404).json({ error: 'Round not found' });
+
+    const permitted = await canManageProgram(req.userId || '', round.program_id);
+    if (!permitted) return res.status(403).json({ error: 'Insufficient permissions' });
+
+    const result = await promoteRound(roundId, req.userId || 'admin');
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    await invalidateRound(round.program_id);
+
+    return res.json({ ok: true, enrolled: result.enrolled });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
