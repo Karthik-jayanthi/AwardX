@@ -1,34 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/database';
-import { PaymentConfig, Program } from '../../services/models';
+import { Program } from '../../services/models';
 import { Button } from '../Button';
-import { Calendar, Image as ImageIcon, Type, Link as LinkIcon, Save, AlertCircle, CreditCard, DollarSign, CheckCircle } from 'lucide-react';
+import { Calendar, Image as ImageIcon, Type, Link as LinkIcon, Save, AlertCircle } from 'lucide-react';
 
 interface ProgramDetailsViewProps {
     activeEvent: Program | null;
 }
 
 export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEvent }) => {
-    const defaultPaymentConfig: PaymentConfig = {
-        enabled: false,
-        provider: 'Stripe',
-        currency: 'USD',
-        fee: 0,
-        connected: false,
-        publicKey: '',
-    };
-
     const [formData, setFormData] = useState<Partial<Program>>({
         title: '',
-        description: '', // Program interface in demoDb might not have description, but DB does. I need to check interface.
+        description: '',
         deadline: '',
         status: 'Draft',
         slug: '',
         coverImageUrl: '',
         category: 'General',
         visibility: 'Public',
-        paymentConfig: defaultPaymentConfig,
     });
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
@@ -45,17 +35,12 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                 coverImageUrl: activeEvent.coverImageUrl,
                 visibility: activeEvent.visibility,
                 category: activeEvent.category,
-                paymentConfig: {
-                    ...defaultPaymentConfig,
-                    ...(activeEvent.paymentConfig || {}),
-                },
                 applicationMode: activeEvent.applicationMode || 'standard',
                 requireGithubAuth: activeEvent.requireGithubAuth ?? false,
             });
         }
     }, [activeEvent]);
 
-    const paymentConfig = formData.paymentConfig || defaultPaymentConfig;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -271,157 +256,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ activeEv
                     </div>
                 </section>
 
-                <section className="space-y-4 pt-4">
-                    <h2 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-2">Payment Configuration</h2>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                    <CreditCard className="w-4 h-4 text-indigo-600" />
-                                    Collect submission fees
-                                </p>
-                                <p className="text-xs text-slate-500 mt-1">Enable checkout before final submission confirmation.</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setFormData({
-                                    ...formData,
-                                    paymentConfig: { ...paymentConfig, enabled: !paymentConfig.enabled },
-                                })}
-                                className={`relative h-7 w-12 rounded-full transition-colors ${paymentConfig.enabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                                aria-label="Toggle payment collection"
-                            >
-                                <span
-                                    className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${paymentConfig.enabled ? 'translate-x-6' : 'translate-x-1'}`}
-                                />
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-1">Provider</label>
-                                <select
-                                    value={paymentConfig.provider}
-                                    onChange={(e) => setFormData({
-                                        ...formData,
-                                        paymentConfig: { ...paymentConfig, provider: e.target.value as PaymentConfig['provider'] },
-                                    })}
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                >
-                                    <option value="Stripe">Stripe</option>
-                                    <option value="PayPal">PayPal</option>
-                                    <option value="Razorpay">Razorpay</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-1">Currency</label>
-                                <select
-                                    value={paymentConfig.currency}
-                                    onChange={(e) => setFormData({
-                                        ...formData,
-                                        paymentConfig: { ...paymentConfig, currency: e.target.value },
-                                    })}
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                >
-                                    <option value="USD">USD</option>
-                                    <option value="EUR">EUR</option>
-                                    <option value="GBP">GBP</option>
-                                    <option value="CAD">CAD</option>
-                                    <option value="INR">INR</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-1">Submission Fee</label>
-                                <div className="relative">
-                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={paymentConfig.fee}
-                                        onChange={(e) => setFormData({
-                                            ...formData,
-                                            paymentConfig: { ...paymentConfig, fee: Number(e.target.value) || 0 },
-                                        })}
-                                        className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-1">Public Key (optional)</label>
-                            <input
-                                type="text"
-                                value={paymentConfig.publicKey || ''}
-                                onChange={(e) => setFormData({
-                                    ...formData,
-                                    paymentConfig: { ...paymentConfig, publicKey: e.target.value },
-                                })}
-                                placeholder="pk_live_..."
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            />
-                        </div>
-
-                        {paymentConfig.provider === 'Razorpay' && (
-                          <div className="space-y-4 pt-2">
-                            <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-1">Razorpay Key ID</label>
-                              <input
-                                type="text"
-                                value={paymentConfig.publicKey || ''}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  paymentConfig: { ...paymentConfig, publicKey: e.target.value },
-                                })}
-                                placeholder="rzp_live_..."
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-semibold text-slate-700 mb-1">Razorpay Key Secret</label>
-                              <input
-                                type="password"
-                                value={paymentConfig.secretKey || ''}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  paymentConfig: { ...paymentConfig, secretKey: e.target.value },
-                                })}
-                                placeholder="••••••••••••"
-                                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                              />
-                              <p className="text-xs text-slate-500 mt-1">Found in your Razorpay Dashboard &rarr; Settings &rarr; API Keys</p>
-                            </div>
-                            <div className={`flex items-center gap-3 p-3 rounded-lg border ${
-                              paymentConfig.publicKey && paymentConfig.secretKey
-                                ? 'bg-green-50 border-green-200 text-green-700'
-                                : 'bg-amber-50 border-amber-200 text-amber-700'
-                            }`}>
-                              {paymentConfig.publicKey && paymentConfig.secretKey ? (
-                                <>
-                                  <CheckCircle className="w-5 h-5 text-green-600" />
-                                  <div>
-                                    <p className="text-sm font-semibold">Razorpay configured</p>
-                                    <p className="text-xs opacity-75">Payment collection is ready</p>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <AlertCircle className="w-5 h-5 text-amber-600" />
-                                  <div>
-                                    <p className="text-sm font-semibold">Razorpay not configured</p>
-                                    <p className="text-xs opacity-75">Add both Key ID and Key Secret to enable payments</p>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                </section>
 
                 {/* Feedback Messages */}
                 {error && (
