@@ -65,6 +65,21 @@ const EventTypeCard = ({ type, label, icon: Icon, description, onClick }: any) =
    </motion.button>
 );
 
+const INDUSTRIES = [
+   "Technology",
+   "AI",
+   "Cybersecurity",
+   "Healthcare",
+   "Education",
+   "Business",
+   "Finance",
+   "Government",
+   "Non-Profit",
+   "Arts & Culture",
+   "Sports",
+   "Media",
+];
+
 const ExistingEventCard: React.FC<{
    event: Program;
    onClick: () => void;
@@ -117,7 +132,17 @@ const ExistingEventCard: React.FC<{
       <h3 className="text-lg font-semibold text-slate-900 mb-2 group-hover:text-emerald-700 transition-colors">
          {event.title}
       </h3>
-      <p className="text-sm text-slate-500 mb-5">{event.category} • {event.entriesCount} Entries</p>
+   <div className="mb-5">
+   <div className="flex items-center gap-2 mb-2">
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+         {event.category || 'Uncategorized'}
+      </span>
+   </div>
+
+   <p className="text-sm text-slate-500">
+      {event.entriesCount} Entries
+   </p>
+</div>
 
       <div className="flex items-center text-xs font-semibold text-emerald-700 group-hover:translate-x-0.5 transition-transform">
          Manage Event <ArrowRight className="w-3 h-3 ml-1" />
@@ -145,7 +170,7 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
    const [events, setEvents] = useState<Program[]>([]);
    const [isModalOpen, setIsModalOpen] = useState(false);
    const [selectedType, setSelectedType] = useState<EventType | null>(null);
-   const [newEvent, setNewEvent] = useState({ title: '', category: 'General', deadline: '' });
+   const [newEvent, setNewEvent] = useState({ title: '', category: '', deadline: '' });
    const [isLoading, setIsLoading] = useState(true);
    const [isRefreshing, setIsRefreshing] = useState(false);
    const [isCreating, setIsCreating] = useState(false);
@@ -432,8 +457,6 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
          // Replace optimistic event with real one
          setEvents(prev => prev.map(e => e.id === optimisticEvent.id ? created : e));
 
-         // Automatically enter the new event
-         onSelectEvent(created);
       } catch (error: any) {
          console.error('Failed to create program:', error);
          // Remove optimistic event on error
@@ -1060,22 +1083,34 @@ export const EventSelectionView: React.FC<EventSelectionViewProps> = ({
                      placeholder={`e.g. Annual ${selectedType} 2024`}
                   />
                </div>
-               <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Industry / Category</label>
-                  <select
-                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-300 outline-none"
-                     value={newEvent.category}
-                     onChange={e => setNewEvent({ ...newEvent, category: e.target.value })}
-                  >
-                     <option>General</option>
-                     <option>Design</option>
-                     <option>Technology</option>
-                     <option>Business</option>
-                     <option>Arts</option>
-                     <option>Education</option>
-                     <option>Non-Profit</option>
-                  </select>
-               </div>
+<div>
+   <label className="block text-sm font-semibold text-slate-700 mb-3">
+      Industry Focus
+   </label>
+
+   <div className="flex flex-wrap gap-2">
+      {INDUSTRIES.map((industry) => (
+         <button
+            key={industry}
+            type="button"
+            onClick={() =>
+               setNewEvent({
+                  ...newEvent,
+                  category: industry,
+               })
+            }
+            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all
+               ${
+                  newEvent.category === industry
+                     ? 'bg-emerald-600 text-white border-emerald-600'
+                     : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
+               }`}
+         >
+            {industry}
+         </button>
+      ))}
+   </div>
+</div>
                <div>
                   <AppDatePicker
                      label="Submission Deadline"
