@@ -29,7 +29,8 @@ const PROGRAM_SELECT = `
 	entries_count,
 	created_at,
 	updated_at,
-	created_by
+	created_by,
+	event_types(name, icon)
 `;
 
 router.get('/', requireAuth, async (req: AuthenticatedRequest, res) => {

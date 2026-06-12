@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient, type RealtimeChannel } from '@supabase/supabase-js';
 import { trackSupabaseRequest } from './supabaseLoading';
+import { fetchBackendJson } from './backendApi';
 
 // Environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -666,6 +667,13 @@ export const organizations = {
         .update({ organization_id: existingOrg.id })
         .eq('id', user.id);
 
+      await supabase
+        .from('organization_members')
+        .upsert(
+          { organization_id: existingOrg.id, user_id: user.id, status: 'active', joined_at: new Date().toISOString() },
+          { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
+        );
+
       return { data: existingOrg, error: null };
     }
 
@@ -719,6 +727,13 @@ export const organizations = {
             .update({ organization_id: existing.id })
             .eq('id', user.id);
 
+          await supabase
+            .from('organization_members')
+            .upsert(
+              { organization_id: existing.id, user_id: user.id, status: 'active', joined_at: new Date().toISOString() },
+              { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
+            );
+
           return { data: existing, error: null };
         }
       }
@@ -753,6 +768,14 @@ export const organizations = {
         .update({ organization_id: org.id })
         .eq('id', user.id);
     }
+
+    // Ensure user is in organization_members so RLS current_org_ids() resolves correctly
+    await supabase
+      .from('organization_members')
+      .upsert(
+        { organization_id: org.id, user_id: user.id, status: 'active', joined_at: new Date().toISOString() },
+        { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
+      );
 
     // Clear cache
     return { data: org, error: null };
@@ -880,18 +903,24 @@ export const programs = {
       };
     }
 
-    const { data, error } = await supabase
-      .from('programs')
-      .insert({
-        ...program,
-        organization_id: orgId,
-      })
-      .select(`
-        *,
-        event_types(name, icon)
-      `)
-      .single();
-    return { data, error };
+    try {
+      const result = await fetchBackendJson<{ data: any }>('/api/programs', {
+        method: 'POST',
+        requireAuth: true,
+        body: {
+          organization_id: orgId,
+          title: program.title,
+          description: program.description || '',
+          industry_category: program.industry_category,
+          event_type_id: program.event_type_id,
+          deadline: program.deadline,
+        },
+        errorPrefix: 'Create program',
+      });
+      return { data: result.data, error: null };
+    } catch (err: any) {
+      return { data: null, error: { message: err.message || 'Failed to create program' } };
+    }
   },
 
   update: async (id: string, updates: Partial<{
