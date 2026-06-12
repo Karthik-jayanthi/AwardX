@@ -288,13 +288,29 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
       }
    };
 
-   const handleToggleSelect = (categoryId: string) => {
-      setSelectedIds(prev =>
-         prev.includes(categoryId)
-            ? prev.filter(id => id !== categoryId)
-            : [...prev, categoryId]
-      );
-   };
+const getDescendantIds = (categoryId: string): string[] => {
+   const children = categories.filter(c => c.parentId === categoryId);
+
+   return children.flatMap(child => [
+      child.id,
+      ...getDescendantIds(child.id),
+   ]);
+};
+
+const handleToggleSelect = (categoryId: string) => {
+   const descendants = getDescendantIds(categoryId);
+   const idsToToggle = [categoryId, ...descendants];
+
+   setSelectedIds(prev => {
+      const isSelected = prev.includes(categoryId);
+
+      if (isSelected) {
+         return prev.filter(id => !idsToToggle.includes(id));
+      }
+
+      return [...new Set([...prev, ...idsToToggle])];
+   });
+};
 
    const allSelected = categories.length > 0 && selectedIds.length === categories.length;
    const handleToggleSelectAll = () => {
