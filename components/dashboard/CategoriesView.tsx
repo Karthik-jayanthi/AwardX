@@ -390,9 +390,16 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                   </Button>
                )}
 
-               <Button className="flex items-center gap-2" onClick={() => openModal('')} data-demo-target="awards-add-category">
-                  <Plus className="w-4 h-4" /> Add Root Category
-               </Button>
+<div className="absolute bottom-6 right-6">
+  <Button
+    size="lg"
+    className="shadow-lg rounded-full"
+    onClick={() => openModal('')}
+  >
+    <Plus className="w-4 h-4 mr-2" />
+    Add Root Category
+  </Button>
+</div>
             </div>,
             portalTarget
          )}
@@ -451,11 +458,34 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
                   </div>
                )}
 
-               {viewMode === 'workflow' && (
-                  <div className="flex-1 min-h-0 h-full w-full overflow-hidden overscroll-none">
-                     <CategoriesWorkflow categories={categories} onAddSub={openModal} onDelete={handleDelete} selectedIds={selectedIds} onToggleSelect={handleToggleSelect} programId={activeEvent?.id} />
-                  </div>
-               )}
+{viewMode === 'workflow' && (
+  <div className="flex-1 min-h-0 h-full w-full overflow-hidden">
+    {categories.length === 0 ? (
+      <div className="h-full flex flex-col items-center justify-center">
+        <Folder className="w-12 h-12 text-slate-300 mb-4" />
+        <h3 className="text-lg font-semibold text-slate-900">
+          No Categories Yet
+        </h3>
+        <p className="text-slate-500 mb-6">
+          Create your first root category to start building the award structure.
+        </p>
+        <Button onClick={() => openModal('')}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Root Category
+        </Button>
+      </div>
+    ) : (
+      <CategoriesWorkflow
+        categories={categories}
+        onAddSub={openModal}
+        onDelete={handleDelete}
+        selectedIds={selectedIds}
+        onToggleSelect={handleToggleSelect}
+        programId={activeEvent?.id}
+      />
+    )}
+  </div>
+)}
 
                {viewMode === 'tiles' && (
                   <div className="flex-1 min-h-0 overflow-y-auto p-4 lg:p-6">
